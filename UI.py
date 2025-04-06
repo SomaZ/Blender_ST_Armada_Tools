@@ -80,7 +80,6 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
 def menu_func_sod_import(self, context):
     self.layout.operator(Import_STA_SOD.bl_idname, text="ST:Armada (.sod)")
 
-
 def menu_func_sod_export(self, context):
     self.layout.operator(Export_STA_SOD.bl_idname, text="ST:Armada (.sod)")
 
@@ -96,13 +95,27 @@ class STA_PT_Materialpanel(bpy.types.Panel):
         mat = context.material
         if mat is None:
             return
-        layout.label(text = mat.name.split(".")[0])
-        props = ["STA_Export", "STA_Ambient", "STA_Diffuse", "STA_Specular", "STA_Specular_power", "STA_Lighting_model"]
-        for prop in props:
-            if prop not in mat:
-                continue
-            row = layout.row()
-            row.prop(mat, '["' + prop + '"]', text = prop[3:].replace("_", " "))
+        
+        if "ST:A Material" not in mat.node_tree.nodes:
+            # Add material operator with name input
+            return
+
+        material_node = mat.node_tree.nodes["ST:A Material"]
+
+        layout.label(text = material_node.node_tree.name)
+        if material_node is not None:
+            col = layout.column()
+            ambient = material_node.inputs["Ambient Color"]
+            col.prop(ambient, "default_value", text="Ambient Color")
+            diffuse = material_node.inputs["Diffuse Color"]
+            col.prop(diffuse, "default_value", text="Diffuse Color")
+            specular = material_node.inputs["Specular Color"]
+            col.prop(specular, "default_value", text="Specular Color")
+            specular = material_node.inputs["Specular Power"]
+            col.prop(specular, "default_value", text="Specular Power")
+            model = material_node.inputs["Lighting Model"]
+            col.prop(model, "default_value", text="Lighting Model")
+
 
 class STA_PT_EntityPanel(bpy.types.Panel):
     bl_idname = "STA_PT_entity_panel"
@@ -145,6 +158,7 @@ class STA_PT_EntityPanel(bpy.types.Panel):
 
         row.label(text = node_match[node_type])
         row.prop(obj, '["node_type"]')
+        # Add operators to change node type
 
         if "animated" in obj:
             layout.separator()
@@ -157,6 +171,9 @@ class STA_PT_EntityPanel(bpy.types.Panel):
                 row.prop(obj, '["end_frame"]', text = "Last frame")
                 row = layout.row()
                 row.prop(obj, '["length"]', text = "Length")
+        else:
+            # Add animation info operator
+            pass
         
         layout.separator()
         
@@ -168,7 +185,7 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         mesh_props = ("Material", "Texture")
         for prop in mesh_props:
             if prop.lower() not in obj:
-                obj[prop] = ""
+                continue
             row = layout.row()
             row.prop(obj, '["' + prop.lower() + '"]')
 
@@ -176,37 +193,38 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             0: "Two sided",
             1: "Front sided"
         }
-        if "cull_type" not in obj:
-            obj["cull_type"] = 1
-        row = layout.row()
-        if obj["cull_type"] not in cull_match:
-            row.label(text = "Unknown cull type")
+        if "cull_type" in obj:
+            row = layout.row()
+            if obj["cull_type"] not in cull_match:
+                row.label(text = "Unknown cull type")
+            else:
+                row.label(text = cull_match[obj["cull_type"]])
+            row.prop(obj, '["cull_type"]')
         else:
-            row.label(text = cull_match[obj["cull_type"]])
-        row.prop(obj, '["cull_type"]')
+            # Add cull info operator
+            pass
 
         layout.separator()
 
-        if "texture_animation" not in obj:
-            obj["texture_animation"] = False
-
         row = layout.row()
-        row.prop(obj, '["texture_animation"]', text = "Animated texture")
+        if "texture_animation" in obj:
+            row.prop(obj, '["texture_animation"]', text = "Animated texture")
+        else:
+            # Add animation info operator
+            return
+
         if not obj["texture_animation"]:
             return
         
         row = layout.row()
-        if "ref_animation" not in obj:
-            obj["ref_animation"] = ""
-        row.prop(obj, '["ref_animation"]', text = "Animation")
+        if "ref_animation" in obj:
+            row.prop(obj, '["ref_animation"]', text = "Animation")
 
         row = layout.row()
-        if "ref_type" not in obj:
-            obj["ref_type"] = 4
-        row.label(text = "Animation type: " + str(obj["ref_type"]))
+        if "ref_type" in obj:
+            row.label(text = "Animation type: " + str(obj["ref_type"]))
 
         row = layout.row()
-        if "ref_offset" not in obj:
-            obj["ref_offset"] = 0.0
-        row.prop(obj, '["ref_offset"]', text = "Offset")
+        if "ref_offset" in obj:
+            row.prop(obj, '["ref_offset"]', text = "Offset")
 

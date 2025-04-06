@@ -86,7 +86,7 @@ class Mesh:
         if (sod_version > 1.6):
             self.material = Identifier.from_file(file).name
         else:
-            self.material = "Default"
+            self.material = "default"
         self.texture = Identifier.from_file(file).name
         self.num_vertices = struct.unpack("<H", file.read(2))[0]
         self.num_tcs = struct.unpack("<H", file.read(2))[0]
@@ -196,27 +196,28 @@ class SOD:
                 return
             
             version = round(struct.unpack("<f", version)[0],2)
+            print("SOD Version:", version)
 
             num_mats = struct.unpack("<H", file.read(2))[0]
-            print("num_mats", num_mats)
+            print("Materials:", num_mats)
             for i in range(num_mats):
                 material = Material.from_file(file)
                 materials[material.name] = material
 
             num_nodes = struct.unpack("<H", file.read(2))[0]
-            print("num_nodes", num_nodes)
+            print("Nodes:", num_nodes)
             for i in range(num_nodes):
                 node = Node.from_file(file, version)
                 nodes[node.name] = node
 
             num_animation_channels = struct.unpack("<H", file.read(2))[0]
-            print("num_animation_channels", num_animation_channels)
+            print("Mesh Animations", num_animation_channels)
             for i in range(num_animation_channels):
                 channel = Animation_channel.from_file(file)
                 channels[channel.name] = channel
 
             num_animation_references = struct.unpack("<H", file.read(2))[0]
-            print("num_animation_references", num_animation_references)
+            print("Texture Animations", num_animation_references)
             for i in range(num_animation_references):
                 reference = Animation_reference.from_file(file, version)
                 references[reference.node] = reference

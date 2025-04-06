@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Star Trek Armada Tools",
     "author": "SomaZ",
-    "version": (0, 4, 0),
+    "version": (0, 5, 0),
     "description": "Importer/Exporter for Star Trek Armada sod files",
     "blender": (4, 1, 0),
     "location": "File > Import-Export",
@@ -31,15 +31,18 @@ bl_info = {
 if "bpy" in locals():
     # Just do all the reloading here
     import importlib
-    from . import SOD
+    from . import SOD, Blender_SOD
     importlib.reload(SOD)
+    importlib.reload(Blender_SOD)
+    from . import Blender_Nodes
+    importlib.reload(Blender_Nodes)
+    from . import Blender_Materials
+    importlib.reload(Blender_Materials)
     from . import UI
     importlib.reload(UI)
 else:
     import bpy
-    from . import SOD
     from . import UI
-import os
 
 # ------------------------------------------------------------------------
 #    store properties in the user preferences
@@ -77,7 +80,7 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_import.append(UI.menu_func_sod_import)
-    bpy.types.TOPBAR_MT_file_export.append(UI.menu_func_sod_export)
+    #bpy.types.TOPBAR_MT_file_export.append(UI.menu_func_sod_export)
     #bpy.types.Object.sta_dynamic_props = bpy.props.PointerProperty(
     #    type=UI.DynamicProperties)
 
