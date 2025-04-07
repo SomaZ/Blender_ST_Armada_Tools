@@ -114,13 +114,13 @@ def ImportSOD(sod):
         
         node_object["animated"] = True
         node_object["start_frame"] = 1
-        node_object["end_frame"] = channel.num_keyframes
+        node_object["end_frame"] = len(channel.matrices)
         node_object["length"] = channel.length
         
         node_object.keyframe_insert('location', frame=0, group='LocRot')
         node_object.keyframe_insert('rotation_euler', frame=0, group='LocRot')
         
-        for i in range(channel.num_keyframes):
+        for i in range(len(channel.matrices)):
             matrix = Matrix.Identity(4)
             matrix[0] = [*channel.matrices[i][0:3], -channel.matrices[i][9]]
             matrix[1] = [*channel.matrices[i][3:6], channel.matrices[i][10]]
@@ -129,7 +129,7 @@ def ImportSOD(sod):
             node_object.keyframe_insert('location', frame=i+1, group='LocRot')
             node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
             
-        bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, channel.num_keyframes)
+        bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, len(channel.matrices))
         
     # Parse texture animation info
     for ref in references.values():
