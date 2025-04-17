@@ -1,5 +1,5 @@
 import bpy
-from . import Blender_Nodes
+from . import Blender_Material_Nodes
 from mathutils import Vector
 
 def set_material_custom_properties(mat_node, sod_mat):
@@ -11,8 +11,8 @@ def set_material_custom_properties(mat_node, sod_mat):
     mat_node.inputs["Specular Power"].default_value =  sod_mat.specular_power
     mat_node.inputs["Lighting Model"].default_value =  sod_mat.lighting_model
 
-    if "STA_Export" in material_group.nodes:
-        material_group.nodes["STA_Export"].outputs[0].default_value = 1.0
+    if "ST:A_Export" in material_group.nodes:
+        material_group.nodes["ST:A_Export"].outputs[0].default_value = 1.0
 
 def finish_mat(mat, texture_path, sod_materials):
     mat.use_nodes = True
@@ -45,7 +45,7 @@ def finish_mat(mat, texture_path, sod_materials):
     thresholded = False
     if material != "":
         mat_node = mat.node_tree.nodes.new(type="ShaderNodeGroup")
-        mat_node.node_tree = Blender_Nodes.Material_Node.get_node_tree(material)
+        mat_node.node_tree = Blender_Material_Nodes.Material_Node.get_node_tree(material)
         mat_node.name = "ST:A Material"
         mat.node_tree.links.new(mat_node.inputs[0], img_node.outputs["Color"])
         mat.node_tree.links.new(mat_node.inputs[1], img_node.outputs["Alpha"])

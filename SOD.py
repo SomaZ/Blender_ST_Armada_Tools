@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import struct
 
+SUPPORTED_VERSIONS = (1.6, 1.7, 1.8)
+
 @dataclass
 class Identifier:
     name: str = ""
@@ -112,7 +114,7 @@ class Mesh:
     @classmethod
     def from_file(cls, file, sod_version) -> Mesh:
         self = cls()
-        if (sod_version > 1.6):
+        if (sod_version >= 1.7):
             self.material = Identifier.from_file(file).name
         else:
             self.material = "default"
@@ -241,11 +243,11 @@ class Animation_reference:
 
 @dataclass
 class SOD:
+    version: float = 0.0
     materials: dict[Material] = field(default_factory=dict)
     nodes: dict[Node] = field(default_factory=dict)
     channels: dict[Animation_channel] = field(default_factory=dict)
     references: dict[Animation_reference] = field(default_factory=dict)
-    version: float = 0.0
 
     @classmethod
     def from_file_path(cls, file_path) -> SOD:
@@ -273,7 +275,7 @@ class SOD:
                 print("Not a supported sod file")
                 return
             
-            self.version = round(struct.unpack("<f", version)[0],2)
+            self.version = round(struct.unpack("<f", version)[0], 2)
             version = self.version
             print("SOD Version:", version)
 
@@ -308,6 +310,11 @@ class SOD:
         return self
     
     def to_file(self, file_path):
+
+        if self.version not in SUPPORTED_VERSIONS:
+            raise Exception(
+                "No valid sod version for writing the file. Version was {}".format(self.version))
+        
         array = bytearray()
         array += "Storm3D_SW".encode(encoding="ascii")
         array += struct.pack("<f", self.version)

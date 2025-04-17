@@ -30,7 +30,7 @@ class Import_STA_SOD(bpy.types.Operator, ImportHelper):
         context.scene.sta_sod_file_path = sanitized_filepath
 
         sod = SOD.from_file_path(sanitized_filepath)
-        mesh_objects = Blender_SOD.ImportSOD(sod)
+        mesh_objects = Blender_SOD.Import_SOD(sod)
         texture_path = guess_texture_path(sanitized_filepath.lower())
         Blender_Materials.finsh_object_materials(mesh_objects, texture_path, sod.materials)
         
@@ -70,6 +70,8 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
         if self.only_selected:
             objects = context.selected_objects
 
+        Blender_SOD.Export_SOD(self.filepath)
+
         status = (True, "Whatever")
         if status[0]:
             return {'FINISHED'}
@@ -82,6 +84,101 @@ def menu_func_sod_import(self, context):
 
 def menu_func_sod_export(self, context):
     self.layout.operator(Export_STA_SOD.bl_idname, text="ST:Armada (.sod)")
+
+def update_material_type(self, context):
+    obj = context.active_object
+    obj["material"] = self.material_type
+    return
+
+def update_face_cull(self, context):
+    obj = context.active_object
+    obj["cull_type"] = int(self.face_cull)
+    return
+
+def update_animated(self, context):
+    obj = context.active_object
+    if self.animated:
+        if "start_frame" not in obj:
+            obj["start_frame"] = 1
+        if "end_frame" not in obj:
+            obj["end_frame"] = 1
+        if "length" not in obj:
+            obj["length"] = 4.0
+    else:
+        if "start_frame" in obj:
+            del obj["start_frame"]
+        if "end_frame" in obj:
+            del obj["end_frame"]
+        if "length" in obj:
+            del obj["length"]
+
+def update_texture_animation(self, context):
+    obj = context.active_object
+    if self.texture_animated:
+        if "ref_animation" not in obj:
+            obj["ref_animation"] = ""
+        if "ref_type" not in obj:
+            obj["ref_type"] = 4
+        if "ref_offset" not in obj:
+            obj["ref_offset"] = 0.0
+    else:
+        if "ref_animation" in obj:
+            del obj["ref_animation"]
+        if "ref_type" in obj:
+            del obj["ref_type"]
+        if "ref_offset" in obj:
+            del obj["ref_offset"]
+
+class STA_Dynamic_Node_Properties(PropertyGroup):
+    material_type: EnumProperty(
+        name="Material Type",
+        description="Changes how the models material behave",
+        default='default',
+        #update=update_material_type,
+        items=[
+            ('default', "Standard material",
+             "Standard material", 0),
+            ('additive', "Use additive blending",
+             "Use additive blending", 1),
+            ('translucent', "Semi transparent",
+             "Semi transparent", 2),
+            ('alphathreshold', "Use alpha channel 'cut outs'",
+             "alpha channels will have hard edged 'threshold' but"
+              " objects will be drawn quickly", 3),
+            ('alpha ', "Use entire alpha channel",
+             "Object will require sorting, so will have performance implications", 4),
+            ('wireframe', "Use wireframe graphics",
+             "Use wireframe graphics", 5),
+        ])
+    face_cull: EnumProperty(
+        name="Face Culling",
+        description="Changes how the models faces orient",
+        default="1",
+        #update=update_face_cull,
+        items=[
+            ("1", "Front sided",
+             "Backface culling", 0),
+            ("0", "Two sided",
+             "No face culling", 1),
+        ])
+    texture_name: StringProperty(
+        name="Mesh Texture",
+        description="Changes the models texture",
+        default="default"
+    )
+    animated: BoolProperty(
+        name="Animated Node",
+        description="Is the current node animated?",
+        default=False,
+        update=update_animated
+    )
+    texture_animated: BoolProperty(
+        name="Texture animation",
+        description="Is the current texture animated?",
+        default=False,
+        update=update_texture_animation
+    )
+
 
 class STA_PT_Materialpanel(bpy.types.Panel):
     bl_idname = "STA_PT_Materialpanel"
@@ -126,12 +223,14 @@ class STA_PT_EntityPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = bpy.context.active_object
+        obj = context.active_object
 
         addon_name = __name__.split('.')[0]
         prefs = context.preferences.addons[addon_name].preferences
 
         if obj is None:
+            return
+        if obj.type not in ("MESH", "EMPTY"):
             return
         
         node_type = 0
@@ -157,74 +256,43 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             return
 
         row.label(text = node_match[node_type])
-        row.prop(obj, '["node_type"]')
+        #row.prop(obj, '["node_type"]')
         # Add operators to change node type
-
-        if "animated" in obj:
-            layout.separator()
-            row = layout.row()
-            row.prop(obj, '["animated"]', text = "Animated")
-            if obj["animated"]:
+        layout.separator()
+        layout.prop(obj.sta_dynamic_props, "animated")
+        if obj.sta_dynamic_props.animated:
+            if "start_frame" in obj:
                 row = layout.row()
                 row.prop(obj, '["start_frame"]', text = "First frame")
+            if "end_frame" in obj: 
                 row = layout.row()
                 row.prop(obj, '["end_frame"]', text = "Last frame")
+            if "length" in obj:
                 row = layout.row()
                 row.prop(obj, '["length"]', text = "Length")
-        else:
-            # Add animation info operator
-            pass
         
         layout.separator()
-        
         if node_type == 12:
             row = layout.row()
             row.prop(obj, '["emitter"]')
             return
-        
-        mesh_props = ("Material", "Texture")
-        for prop in mesh_props:
-            if prop.lower() not in obj:
-                continue
-            row = layout.row()
-            row.prop(obj, '["' + prop.lower() + '"]')
-
-        cull_match = {
-            0: "Two sided",
-            1: "Front sided"
-        }
-        if "cull_type" in obj:
-            row = layout.row()
-            if obj["cull_type"] not in cull_match:
-                row.label(text = "Unknown cull type")
-            else:
-                row.label(text = cull_match[obj["cull_type"]])
-            row.prop(obj, '["cull_type"]')
-        else:
-            # Add cull info operator
-            pass
+        if node_type == 1:
+            layout.prop(obj.sta_dynamic_props, "material_type")
+            layout.prop(obj.sta_dynamic_props, "face_cull")
+            layout.prop(obj.sta_dynamic_props, "texture_name")
 
         layout.separator()
+        layout.prop(obj.sta_dynamic_props, "texture_animated")
+        if obj.sta_dynamic_props.texture_animated:
+            if "ref_animation" in obj:
+                row = layout.row()
+                row.prop(obj, '["ref_animation"]', text = "Animation")
 
-        row = layout.row()
-        if "texture_animation" in obj:
-            row.prop(obj, '["texture_animation"]', text = "Animated texture")
-        else:
-            # Add animation info operator
-            return
+            if "ref_type" in obj:
+                row = layout.row()
+                row.label(text = "Animation type: " + str(obj["ref_type"]))
 
-        if not obj["texture_animation"]:
-            return
-        
-        row = layout.row()
-        if "ref_animation" in obj:
-            row.prop(obj, '["ref_animation"]', text = "Animation")
-
-        row = layout.row()
-        if "ref_type" in obj:
-            row.label(text = "Animation type: " + str(obj["ref_type"]))
-
-        row = layout.row()
-        if "ref_offset" in obj:
-            row.prop(obj, '["ref_offset"]', text = "Offset")
+            if "ref_offset" in obj:
+                row = layout.row()
+                row.prop(obj, '["ref_offset"]', text = "Offset")
 

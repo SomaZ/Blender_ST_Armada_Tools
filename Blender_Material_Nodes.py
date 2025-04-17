@@ -198,7 +198,7 @@ class Material_Node(Generic_Node_Group):
         material_group.links.new(term1_001.outputs[0], term1_002.inputs[2])
         
         export_node = material_group.nodes.new(type="ShaderNodeValue")
-        export_node.name = "STA_Export"
+        export_node.name = "ST:A_Export"
         export_node.outputs[0].default_value = 0
         export_node.location = (-1220.9, 72.6)
 
