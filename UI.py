@@ -154,6 +154,8 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
              "Object will require sorting, so will have performance implications", 4),
             ('wireframe', "Use wireframe graphics",
              "Use wireframe graphics", 5),
+            ('wormhole', "Used by wormholes",
+             "Used by wormholes", 6),
         ])
     face_cull: EnumProperty(
         name="Face Culling",
