@@ -1,5 +1,6 @@
 import bpy
 from mathutils import Matrix, Vector
+from numpy import array, dot, sqrt
 from .SOD import *
 
 rotation_mat = Matrix((
@@ -8,13 +9,93 @@ rotation_mat = Matrix((
                 [0.0, 1.0,  0.0,  0.0],
                 [0.0, 0.0,  0.0,  1.0]
                 ))
-inverse_rot_mat = rotation_mat.inverted()
+inverse_rot_mat = Matrix((
+                [1.0, 0.0,  0.0,  0.0],
+                [0.0, 0.0,  1.0,  0.0],
+                [0.0, -1.0,  0.0,  0.0],
+                [0.0, 0.0,  0.0,  1.0]
+                ))
+
+def normalize(vector):
+    sqr_length = dot(vector, vector)
+    if sqr_length == 0.0:
+        return array((0.0, 0.0, 0.0))
+    return vector / sqrt(sqr_length)
+
+def mat34_to_blender(mat34):
+    matrix = Matrix.Identity(4)
+    matrix[0] = [*-normalize(mat34[0:3]), -mat34[9]]
+    matrix[1] = [*normalize(mat34[3:6]), mat34[10]]
+    matrix[2] = [*-normalize(mat34[6:9]), mat34[11]]
+
+    matrix[0] *= Vector((-1.0, 1.0, -1.0, 1.0))
+    matrix[1] *= Vector((-1.0, 1.0, -1.0, 1.0))
+    matrix[2] *= Vector((-1.0, 1.0, -1.0, 1.0))
+    return matrix
+
+def non_root_child_mat34_to_blender(mat34):
+    matrix = Matrix.Identity(4)
+    matrix[0] = [*-normalize(mat34[0:3]), -mat34[9]]
+    matrix[1] = [*-normalize(mat34[3:6]), mat34[10]]
+    matrix[2] = [*-normalize(mat34[6:9]), mat34[11]]
+
+    matrix[0] *= Vector((-1.0, -1.0, -1.0, 1.0))
+    matrix[1] *= Vector((-1.0, -1.0, -1.0, 1.0))
+    matrix[2] *= Vector((-1.0, -1.0, -1.0, 1.0))
+    return matrix
+
+def mat34_from_blender(matrix):
+    mat34 = [0.0]*12
+    mat34[0:3] = -normalize(matrix[0][0:3])
+    mat34[3:6] = normalize(matrix[1][0:3])
+    mat34[6:9] = -normalize(matrix[2][0:3])
+
+    mat34[0] *= -1.0
+    mat34[3] *= -1.0
+    mat34[6] *= -1.0
+
+    mat34[1] *= 1.0
+    mat34[4] *= 1.0
+    mat34[7] *= 1.0
+
+    mat34[2] *= -1.0
+    mat34[5] *= -1.0
+    mat34[8] *= -1.0
+
+    mat34[9] = -matrix[0][3]
+    mat34[10] = matrix[1][3]
+    mat34[11] = matrix[2][3]
+    return mat34
+
+def non_root_child_mat34_from_blender(matrix):
+    mat34 = [0.0]*12
+    mat34[0:3] = -normalize(matrix[0][0:3])
+    mat34[3:6] = -normalize(matrix[1][0:3])
+    mat34[6:9] = -normalize(matrix[2][0:3])
+
+    mat34[0] *= -1.0
+    mat34[3] *= -1.0
+    mat34[6] *= -1.0
+
+    mat34[1] *= -1.0
+    mat34[4] *= -1.0
+    mat34[7] *= -1.0
+
+    mat34[2] *= -1.0
+    mat34[5] *= -1.0
+    mat34[8] *= -1.0
+
+    mat34[9] = -matrix[0][3]
+    mat34[10] = matrix[1][3]
+    mat34[11] = matrix[2][3]
+    return mat34
 
 def Import_SOD(sod):
     nodes = sod.nodes
     channels = sod.channels
     references = sod.references
 
+    objects = []
     mesh_objects = []
 
     # Parse mesh data
@@ -67,7 +148,7 @@ def Import_SOD(sod):
             mesh_objects.append(node_object)
             
             node_object.sta_dynamic_props.material_type = node.mesh.material
-            node_object.sta_dynamic_props.texture_name = node.mesh.texture
+            node_object.sta_dynamic_props.texture_name = node.mesh.texture if node.mesh.texture else ""
             node_object.sta_dynamic_props.face_cull = str(node.mesh.cull_type)
             node_object.sta_dynamic_props.texture_animated = False
         elif node.type == 12:
@@ -84,18 +165,18 @@ def Import_SOD(sod):
             
         node_object["node_type"] = node.type
         node_object.sta_dynamic_props.animated = False
-            
-        matrix = Matrix.Identity(4)
-        matrix[0] = [*node.mat34[0:3], -node.mat34[9]]
-        matrix[1] = [*node.mat34[3:6], node.mat34[10]]
-        matrix[2] = [*node.mat34[6:9], node.mat34[11]]
+        node_object.rotation_mode = 'XYZ'
+        
+        matrix = mat34_to_blender(node.mat34)
         node_object.matrix_world = matrix
-        if not node.root:
-            node_object.matrix_world = rotation_mat @ matrix
-            
+
         if node.root and node.root in bpy.data.objects:
+            if node.root == "root":
+                node_object.matrix_world = rotation_mat @ matrix
             node_object.parent = bpy.data.objects[node.root]
-    
+
+        objects.append(node_object)
+
     # Parse animations
     bpy.context.scene.frame_end = 1
     for channel in list(channels.values())[::-1]:
@@ -110,10 +191,11 @@ def Import_SOD(sod):
         
         parent_object = node_object.parent
         if not parent_object:
-            print("Could not find correct object parent for channel", channel.name)
-            continue
-            
-        parent_matrix = parent_object.matrix_world
+            parent_matrix = Matrix.Identity(4)
+        else:
+            parent_matrix = parent_object.matrix_world
+            if parent_object.name == "root":
+                parent_matrix = rotation_mat @ parent_matrix
         
         node_object.sta_dynamic_props.animated = True
         node_object["start_frame"] = 1
@@ -124,14 +206,16 @@ def Import_SOD(sod):
         node_object.keyframe_insert('rotation_euler', frame=0, group='LocRot')
         
         for i in range(len(channel.matrices)):
-            matrix = Matrix.Identity(4)
-            matrix[0] = [*channel.matrices[i][0:3], -channel.matrices[i][9]]
-            matrix[1] = [*channel.matrices[i][3:6], channel.matrices[i][10]]
-            matrix[2] = [*channel.matrices[i][6:9], channel.matrices[i][11]]
-            node_object.matrix_world = parent_matrix @ matrix
+            if parent_object and parent_object.name == "root":
+                node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
+            else:
+                node_object.matrix_world = parent_matrix @ non_root_child_mat34_to_blender(channel.matrices[i])
             node_object.keyframe_insert('location', frame=i+1, group='LocRot')
             node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
-            
+        
+        if parent_object and parent_object.name != "root":
+            node_object.rotation_mode = 'ZYX'
+
         bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, len(channel.matrices))
         
     # Parse texture animation info
@@ -157,20 +241,23 @@ def Get_material_name(mat):
 def Make_meshes_from_objects(objects):
     meshes = []
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    current_positions = {}
-    current_texture_coordinates = {}
+    current_positions = []
+    current_texture_coordinates = []
     current_groups = {}
+    current_position_indices = {}
+    current_tc_indices = {}
 
     for obj in objects:
         mesh = obj.evaluated_get(depsgraph).to_mesh()
-        #mesh.transform(obj.matrix_world)
+
+        loc, rot, sca = obj.matrix_world.decompose()
 
         if bpy.app.version < (4, 1, 0):
             mesh.calc_normals_split()
 
         mesh.calc_loop_triangles()
-        positions = {}
-        texture_coords = {}
+        positions = []
+        texture_coords = []
         indices = {}
 
         for triangle in mesh.loop_triangles:
@@ -185,7 +272,7 @@ def Make_meshes_from_objects(objects):
             for vert, loop in zip(triangle.vertices, triangle.loops):
                 v = mesh.vertices[vert]
                 l = mesh.loops[loop]
-                pos = v.co.copy().freeze()
+                pos = v.co.copy().freeze() * sca
                 if mesh.has_custom_normals:
                     normal = l.normal.copy().freeze()
                 else:
@@ -194,10 +281,17 @@ def Make_meshes_from_objects(objects):
                 
                 pos_tuple = tuple([*pos, *normal])
                 tex_tuple = tuple([*tc])
-                positions[pos_tuple] = pos * Vector((-1, 1, 1))
-                texture_coords[tex_tuple] = (tc[0], 1.0 - tc[1])
-                pos_indexes.append(pos_tuple)
-                tc_indexes.append(tex_tuple)
+                if pos_tuple not in current_position_indices:
+                    index = len(positions) + len(current_positions)
+                    positions.append(pos * Vector((-1, 1, 1)))
+                    current_position_indices[pos_tuple] = index
+                pos_indexes.append(current_position_indices[pos_tuple])
+
+                if tex_tuple not in current_tc_indices:
+                    index = len(texture_coords) + len(current_texture_coordinates)
+                    texture_coords.append((tc[0], 1.0 - tc[1]))
+                    current_tc_indices[tex_tuple] = index
+                tc_indexes.append(current_tc_indices[tex_tuple])
 
             if mat_name not in indices:
                 indices[mat_name] = []
@@ -210,20 +304,16 @@ def Make_meshes_from_objects(objects):
                     group_fits = False
                     break
                 
+        # If everything still fits into one mesh, add everything and continue
         if (len(current_positions) + len(positions) <= 65355 and 
             len(current_texture_coordinates) + len(texture_coords) <= 65355 and
             group_fits):
 
-            current_positions |= positions
-            current_texture_coordinates |= texture_coords
+            current_positions += positions
+            current_texture_coordinates += texture_coords
 
             for mat in indices:
-                new_indices = []
-                for ips, its in indices[mat]:
-                    new_ips = [list(current_positions).index(i) for i in ips]
-                    new_its = [list(current_texture_coordinates).index(i) for i in its]
-                    new_indices.append((new_ips, new_its))
-                mat_faces = [Face(indices, tc_indices) for indices, tc_indices in new_indices]
+                mat_faces = [Face(indices, tc_indices) for indices, tc_indices in indices[mat]]
 
                 if mat not in current_groups:
                     current_groups[mat] = Vertex_group(mat, mat_faces)
@@ -231,18 +321,73 @@ def Make_meshes_from_objects(objects):
                     current_groups[mat].faces += mat_faces
             continue
         
+        # If new stuff doesnt fit anymore, create mesh for the old data
         meshes.append(
             Mesh(
                 material = obj.sta_dynamic_props.material_type,
                 texture = obj.sta_dynamic_props.texture_name,
                 cull_type = obj.sta_dynamic_props.face_cull,
-                verts = current_positions.values(),
-                tcs = current_texture_coordinates.values(),
+                verts = current_positions,
+                tcs = current_texture_coordinates,
                 groups = current_groups.values()
             ))
-        current_positions = {}
-        current_texture_coordinates = {}
+
+        # Redo current object...
+        current_position_indices = {}
+        current_tc_indices = {}
+        current_positions = []
+        current_texture_coordinates = []
         current_groups = {}
+
+        positions = []
+        texture_coords = []
+        indices = {}
+
+        for triangle in mesh.loop_triangles:
+            if len(mesh.materials) == 0:
+                mat_name = "default"
+            else:
+                mat = mesh.materials[triangle.material_index]
+                mat_name = Get_material_name(mat)
+
+            pos_indexes = []
+            tc_indexes = []
+            for vert, loop in zip(triangle.vertices, triangle.loops):
+                v = mesh.vertices[vert]
+                l = mesh.loops[loop]
+                pos = v.co.copy().freeze() * sca
+                if mesh.has_custom_normals:
+                    normal = l.normal.copy().freeze()
+                else:
+                    normal = v.normal.copy().freeze()
+                tc = mesh.uv_layers.active.data[loop].uv.copy().freeze()
+                
+                pos_tuple = tuple([*pos, *normal])
+                tex_tuple = tuple([*tc])
+                if pos_tuple not in current_position_indices:
+                    index = len(positions) + len(current_position_indices)
+                    positions.append(pos * Vector((-1, 1, 1)))
+                    current_position_indices[pos_tuple] = index
+                pos_indexes.append(current_position_indices[pos_tuple])
+
+                if tex_tuple not in current_tc_indices:
+                    index = len(texture_coords) + len(current_tc_indices)
+                    texture_coords.append((tc[0], 1.0 - tc[1]))
+                    current_tc_indices[tex_tuple] = index
+                tc_indexes.append(current_tc_indices[tex_tuple])
+
+            if mat_name not in indices:
+                indices[mat_name] = []
+            indices[mat_name].append((pos_indexes, tc_indexes))
+        
+        current_positions += positions
+        current_texture_coordinates += texture_coords
+        for mat in indices:
+            mat_faces = [Face(indices, tc_indices) for indices, tc_indices in indices[mat]]
+            if mat not in current_groups:
+                current_groups[mat] = Vertex_group(mat, mat_faces)
+            else:
+                current_groups[mat].faces += mat_faces
 
     if len(current_positions) > 0:
         meshes.append(
@@ -250,29 +395,37 @@ def Make_meshes_from_objects(objects):
                 material = obj.sta_dynamic_props.material_type,
                 texture = obj.sta_dynamic_props.texture_name,
                 cull_type = int(obj.sta_dynamic_props.face_cull),
-                verts = current_positions.values(),
-                tcs = current_texture_coordinates.values(),
+                verts = current_positions,
+                tcs = current_texture_coordinates,
                 groups = current_groups.values()
             ))
 
     return meshes
 
+def Get_xyz_rotated_matrix_world(obj):
+    rotation_mode = obj.rotation_mode
+    obj.rotation_mode = 'XYZ'
+    bpy.context.view_layer.update()
+    world_mat = obj.matrix_world.copy()
+    obj.rotation_mode = rotation_mode
+    return world_mat
+
 def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
-    world_mat = obj.matrix_world
+    world_mat = Get_xyz_rotated_matrix_world(obj)
     parent_name = ""
     if obj.parent:
         parent_name = obj.parent.name
-        world_mat = obj.parent.matrix_world.inverted() @ world_mat
+        world_mat = Get_xyz_rotated_matrix_world(obj.parent).inverted() @ world_mat
+        if parent_name == "root":
+            world_mat = inverse_rot_mat @ world_mat
     else:
-        world_mat = inverse_rot_mat @ world_mat
+        world_mat = Matrix.Identity(4)
 
-    mat34 = [0.0]*12
-    mat34[0:3] = world_mat[0][0:3]
-    mat34[3:6] = world_mat[1][0:3]
-    mat34[6:9] = world_mat[2][0:3]
-    mat34[9] = -world_mat[0][3]
-    mat34[10] = world_mat[1][3]
-    mat34[11] = world_mat[2][3]
+    # Could probably do a much cleaner job here, but works for now
+    if parent_name == "root":
+        mat34 = mat34_from_blender(world_mat)
+    else:
+        mat34 = non_root_child_mat34_from_blender(world_mat)
 
     node_type = 0
     if "node_type" in obj:
@@ -366,22 +519,23 @@ def Export_SOD(file_path, version = 1.8):
         animated_objects)
 
     # add animations
-    for obj in animated_objects:
+    for obj in animated_objects[::-1]:
         matrices = []
         for i in range(int(obj["start_frame"]), int(obj["end_frame"]) + 1):
             bpy.context.scene.frame_set(i)
-            world_mat = obj.matrix_world
+            world_mat = Get_xyz_rotated_matrix_world(obj)
             if obj.parent:
-                world_mat = obj.parent.matrix_world.inverted() @ world_mat
+                world_mat = Get_xyz_rotated_matrix_world(obj.parent).inverted() @ world_mat
+                if obj.parent.name == "root":
+                    world_mat = inverse_rot_mat @ world_mat
             else:
-                world_mat = inverse_rot_mat @ world_mat
-            mat34 = [0.0]*12
-            mat34[0:3] = world_mat[0][0:3]
-            mat34[3:6] = world_mat[1][0:3]
-            mat34[6:9] = world_mat[2][0:3]
-            mat34[9] = -world_mat[0][3]
-            mat34[10] = world_mat[1][3]
-            mat34[11] = world_mat[2][3]
+                world_mat = Matrix.Identity(4)
+
+            # Could probably do a much cleaner job here, but works for now
+            if obj.parent and obj.parent.name == "root":
+                mat34 = mat34_from_blender(world_mat)
+            else:
+                mat34 = non_root_child_mat34_from_blender(world_mat)
             matrices.append(mat34)
 
         new_sod.channels[obj.name] = Animation_channel(
