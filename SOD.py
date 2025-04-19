@@ -259,8 +259,8 @@ class SOD:
         with open(file_path, "rb") as file:
             ident = file.read(10).decode()
             if ident != "Storm3D_SW":
-                print("Not a valid sod file")
-                return
+                raise Exception("Not a valid sod file")
+
             version = file.read(4)
 
             if version == struct.pack("<f", 1.6):

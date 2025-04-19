@@ -29,7 +29,12 @@ class Import_STA_SOD(bpy.types.Operator, ImportHelper):
         sanitized_filepath = self.filepath.replace("\\", "/")
         context.scene.sta_sod_file_path = sanitized_filepath
 
-        sod = SOD.from_file_path(sanitized_filepath)
+        try:
+            sod = SOD.from_file_path(sanitized_filepath)
+        except Exception as e:
+            print(e)
+            self.report({"ERROR"}, str(e))
+            return {'CANCELLED'}
         mesh_objects = Blender_SOD.Import_SOD(sod)
         texture_path = guess_texture_path(sanitized_filepath.lower())
         Blender_Materials.finsh_object_materials(mesh_objects, texture_path, sod.materials)
