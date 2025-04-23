@@ -24,70 +24,23 @@ def normalize(vector):
 
 def mat34_to_blender(mat34):
     matrix = Matrix.Identity(4)
-    matrix[0] = [*-normalize(mat34[0:3]), -mat34[9]]
-    matrix[1] = [*normalize(mat34[3:6]), mat34[10]]
-    matrix[2] = [*-normalize(mat34[6:9]), mat34[11]]
-
-    matrix[0] *= Vector((-1.0, 1.0, -1.0, 1.0))
-    matrix[1] *= Vector((-1.0, 1.0, -1.0, 1.0))
-    matrix[2] *= Vector((-1.0, 1.0, -1.0, 1.0))
-    return matrix
-
-def non_root_child_mat34_to_blender(mat34):
-    matrix = Matrix.Identity(4)
-    matrix[0] = [*-normalize(mat34[0:3]), -mat34[9]]
-    matrix[1] = [*-normalize(mat34[3:6]), mat34[10]]
-    matrix[2] = [*-normalize(mat34[6:9]), mat34[11]]
-
-    matrix[0] *= Vector((-1.0, -1.0, -1.0, 1.0))
-    matrix[1] *= Vector((-1.0, -1.0, -1.0, 1.0))
-    matrix[2] *= Vector((-1.0, -1.0, -1.0, 1.0))
+    matrix.col[0] = [*mat34[0:3], 0.0]
+    matrix.col[1] = [*mat34[3:6], 0.0]
+    matrix.col[2] = [*mat34[6:9], 0.0]
+    matrix.col[3] = [*mat34[9:12], 1.0]
+    matrix.col[0] *= -1.0
+    matrix.row[0] *= -1.0
     return matrix
 
 def mat34_from_blender(matrix):
+    export_matrix = matrix.copy()
+    export_matrix.row[0] *= -1.0
+    export_matrix.col[0] *= -1.0
     mat34 = [0.0]*12
-    mat34[0:3] = -normalize(matrix[0][0:3])
-    mat34[3:6] = normalize(matrix[1][0:3])
-    mat34[6:9] = -normalize(matrix[2][0:3])
-
-    mat34[0] *= -1.0
-    mat34[3] *= -1.0
-    mat34[6] *= -1.0
-
-    mat34[1] *= 1.0
-    mat34[4] *= 1.0
-    mat34[7] *= 1.0
-
-    mat34[2] *= -1.0
-    mat34[5] *= -1.0
-    mat34[8] *= -1.0
-
-    mat34[9] = -matrix[0][3]
-    mat34[10] = matrix[1][3]
-    mat34[11] = matrix[2][3]
-    return mat34
-
-def non_root_child_mat34_from_blender(matrix):
-    mat34 = [0.0]*12
-    mat34[0:3] = -normalize(matrix[0][0:3])
-    mat34[3:6] = -normalize(matrix[1][0:3])
-    mat34[6:9] = -normalize(matrix[2][0:3])
-
-    mat34[0] *= -1.0
-    mat34[3] *= -1.0
-    mat34[6] *= -1.0
-
-    mat34[1] *= -1.0
-    mat34[4] *= -1.0
-    mat34[7] *= -1.0
-
-    mat34[2] *= -1.0
-    mat34[5] *= -1.0
-    mat34[8] *= -1.0
-
-    mat34[9] = -matrix[0][3]
-    mat34[10] = matrix[1][3]
-    mat34[11] = matrix[2][3]
+    mat34[0:3] = normalize(export_matrix.col[0][0:3])
+    mat34[3:6] = normalize(export_matrix.col[1][0:3])
+    mat34[6:9] = normalize(export_matrix.col[2][0:3])
+    mat34[9:12] = export_matrix.col[3][0:3]
     return mat34
 
 def Import_SOD(sod):
@@ -147,7 +100,7 @@ def Import_SOD(sod):
 
             mesh_objects.append(node_object)
             
-            node_object.sta_dynamic_props.material_type = node.mesh.material
+            node_object.sta_dynamic_props.material_type = node.mesh.material if node.mesh.material else "default"
             node_object.sta_dynamic_props.texture_name = node.mesh.texture if node.mesh.texture else ""
             node_object.sta_dynamic_props.face_cull = str(node.mesh.cull_type)
             node_object.sta_dynamic_props.texture_animated = False
@@ -206,10 +159,7 @@ def Import_SOD(sod):
         node_object.keyframe_insert('rotation_euler', frame=0, group='LocRot')
         
         for i in range(len(channel.matrices)):
-            if parent_object and parent_object.name == "root":
-                node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
-            else:
-                node_object.matrix_world = parent_matrix @ non_root_child_mat34_to_blender(channel.matrices[i])
+            node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
             node_object.keyframe_insert('location', frame=i+1, group='LocRot')
             node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
         
@@ -421,12 +371,7 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
     else:
         world_mat = Matrix.Identity(4)
 
-    # Could probably do a much cleaner job here, but works for now
-    if parent_name == "root":
-        mat34 = mat34_from_blender(world_mat)
-    else:
-        mat34 = non_root_child_mat34_from_blender(world_mat)
-
+    mat34 = mat34_from_blender(world_mat)
     node_type = 0
     if "node_type" in obj:
         node_type = int(obj["node_type"])
@@ -531,11 +476,7 @@ def Export_SOD(file_path, version = 1.8):
             else:
                 world_mat = Matrix.Identity(4)
 
-            # Could probably do a much cleaner job here, but works for now
-            if obj.parent and obj.parent.name == "root":
-                mat34 = mat34_from_blender(world_mat)
-            else:
-                mat34 = non_root_child_mat34_from_blender(world_mat)
+            mat34 = mat34_from_blender(world_mat)
             matrices.append(mat34)
 
         new_sod.channels[obj.name] = Animation_channel(
