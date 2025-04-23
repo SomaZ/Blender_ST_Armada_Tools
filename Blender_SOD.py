@@ -95,7 +95,7 @@ def Import_SOD(sod):
             for poly in mesh.polygons:
                 poly.use_smooth = True
             
-            node_object = bpy.data.objects.new(mesh.name, mesh)
+            node_object = bpy.data.objects.new(node.name, mesh)
             bpy.context.collection.objects.link(node_object)
 
             mesh_objects.append(node_object)
