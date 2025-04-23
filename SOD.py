@@ -259,6 +259,7 @@ class SOD:
         with open(file_path, "rb") as file:
             ident = file.read(10).decode()
             if ident != "Storm3D_SW":
+                print("File ident was:", ident)
                 raise Exception("Not a valid sod file")
 
             version = file.read(4)

@@ -50,6 +50,7 @@ def Import_SOD(sod):
 
     objects = []
     mesh_objects = []
+    root_node_name = "root"
 
     # Parse mesh data
     for node in nodes.values():
@@ -118,13 +119,15 @@ def Import_SOD(sod):
             
         node_object["node_type"] = node.type
         node_object.sta_dynamic_props.animated = False
-        node_object.rotation_mode = 'XYZ'
         
         matrix = mat34_to_blender(node.mat34)
         node_object.matrix_world = matrix
 
+        if not node.root or node.root == "":
+            root_node_name = node.name
+
         if node.root and node.root in bpy.data.objects:
-            if node.root == "root":
+            if node.root == root_node_name:
                 node_object.matrix_world = rotation_mat @ matrix
             node_object.parent = bpy.data.objects[node.root]
 
@@ -147,7 +150,7 @@ def Import_SOD(sod):
             parent_matrix = Matrix.Identity(4)
         else:
             parent_matrix = parent_object.matrix_world
-            if parent_object.name == "root":
+            if parent_object.name == root_node_name:
                 parent_matrix = rotation_mat @ parent_matrix
         
         node_object.sta_dynamic_props.animated = True
@@ -162,9 +165,6 @@ def Import_SOD(sod):
             node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
             node_object.keyframe_insert('location', frame=i+1, group='LocRot')
             node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
-        
-        if parent_object and parent_object.name != "root":
-            node_object.rotation_mode = 'ZYX'
 
         bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, len(channel.matrices))
         
@@ -352,20 +352,12 @@ def Make_meshes_from_objects(objects):
 
     return meshes
 
-def Get_xyz_rotated_matrix_world(obj):
-    rotation_mode = obj.rotation_mode
-    obj.rotation_mode = 'XYZ'
-    bpy.context.view_layer.update()
-    world_mat = obj.matrix_world.copy()
-    obj.rotation_mode = rotation_mode
-    return world_mat
-
 def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
-    world_mat = Get_xyz_rotated_matrix_world(obj)
+    world_mat = obj.matrix_world
     parent_name = ""
     if obj.parent:
         parent_name = obj.parent.name
-        world_mat = Get_xyz_rotated_matrix_world(obj.parent).inverted() @ world_mat
+        world_mat = obj.parent.matrix_world.inverted() @ world_mat
         if parent_name == "root":
             world_mat = inverse_rot_mat @ world_mat
     else:
@@ -468,9 +460,9 @@ def Export_SOD(file_path, version = 1.8):
         matrices = []
         for i in range(int(obj["start_frame"]), int(obj["end_frame"]) + 1):
             bpy.context.scene.frame_set(i)
-            world_mat = Get_xyz_rotated_matrix_world(obj)
+            world_mat = obj.matrix_world
             if obj.parent:
-                world_mat = Get_xyz_rotated_matrix_world(obj.parent).inverted() @ world_mat
+                world_mat = obj.parent.matrix_world.inverted() @ world_mat
                 if obj.parent.name == "root":
                     world_mat = inverse_rot_mat @ world_mat
             else:
