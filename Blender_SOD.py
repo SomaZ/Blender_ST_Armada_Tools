@@ -223,10 +223,7 @@ def Make_meshes_from_objects(objects):
                 v = mesh.vertices[vert]
                 l = mesh.loops[loop]
                 pos = v.co.copy().freeze() * sca
-                if mesh.has_custom_normals:
-                    normal = l.normal.copy().freeze()
-                else:
-                    normal = v.normal.copy().freeze()
+                normal = l.normal.copy().freeze()
                 tc = mesh.uv_layers.active.data[loop].uv.copy().freeze()
                 
                 pos_tuple = tuple([*pos, *normal])

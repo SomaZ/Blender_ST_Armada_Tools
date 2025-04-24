@@ -61,8 +61,9 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         props = mat.name.split(".")
         if len(props) == 4:
             material, image_name, cull, type = props
-        elif len(props) == 5 and props[4] == "clone":
+        elif len(props) > 4:
             material, image_name, cull, type = props[:4]
+
         image = bpy.data.images.get(image_name + ".tga")
         if image is None:
             image = bpy.data.images.load(texture_path + image_name + ".tga")
@@ -89,16 +90,14 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
                 thresholded = True
         set_material_drivers(mat_node)
 
+    mat_out_node = None
+    for node in mat.node_tree.nodes.values():
+        if node.type == 'OUTPUT_MATERIAL':
+            mat_out_node = node
+            break
+
     if type == "alpha":
         mat.node_tree.links.new(out_node.inputs["Alpha"], img_node.outputs["Alpha"])
-        mat.blend_method = "HASHED"
-    elif type == "alphathreshold" or thresholded:
-        math_threshold = mat.node_tree.nodes.new(type="ShaderNodeMath")
-        math_threshold.operation = "GREATER_THAN"
-        math_threshold.inputs[1].default_value = 0.5
-        math_threshold.location = out_node.location + Vector([ -400, 0])
-        mat.node_tree.links.new(math_threshold.inputs[0], img_node.outputs["Alpha"])
-        mat.node_tree.links.new(out_node.inputs["Alpha"], math_threshold.outputs[0])
         mat.blend_method = "HASHED"
     elif type == "additive":
         transparent_node = mat.node_tree.nodes.new(type="ShaderNodeBsdfTransparent")
@@ -107,12 +106,7 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         add_node.location = out_node.location + Vector([ 400, 0])
         mat.node_tree.links.new(add_node.inputs[0], transparent_node.outputs[0])
         mat.node_tree.links.new(add_node.inputs[1], out_node.outputs[0])
-
-        mat_out_node = None
-        for node in mat.node_tree.nodes.values():
-            if node.type == 'OUTPUT_MATERIAL':
-                mat_out_node = node
-                break
+        
         if mat_out_node is not None:
             mat_out_node.location = out_node.location + Vector([ 800, 0])
             mat.node_tree.links.new(add_node.outputs[0], mat_out_node.inputs[0])
@@ -121,15 +115,21 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         transparent_node = mat.node_tree.nodes.new(type="ShaderNodeBsdfTransparent")
         transparent_node.location = out_node.location + Vector([ 0, 200])
         mat.node_tree.links.new(transparent_node.inputs["Color"], img_node.outputs["Color"])
-        mat_out_node = None
-        for node in mat.node_tree.nodes.values():
-            if node.type == 'OUTPUT_MATERIAL':
-                mat_out_node = node
-                break
+        
         if mat_out_node is not None:
             mat.node_tree.links.new(transparent_node.outputs[0], mat_out_node.inputs[0])
-
         mat.blend_method = "BLEND"
+    else: # if type == "alphathreshold" or thresholded:
+        math_threshold = mat.node_tree.nodes.new(type="ShaderNodeMath")
+        math_threshold.operation = "GREATER_THAN"
+        math_threshold.inputs[1].default_value = 0.5
+        math_threshold.location = out_node.location + Vector([ -400, 0])
+        mat.node_tree.links.new(math_threshold.inputs[0], img_node.outputs["Alpha"])
+        mat.node_tree.links.new(out_node.inputs["Alpha"], math_threshold.outputs[0])
+        if mat_out_node is not None:
+            mat.node_tree.links.new(out_node.outputs[0], mat_out_node.inputs[0])
+        mat.blend_method = "HASHED"
+        
     mat.node_tree.links.new(out_node.inputs["Emission Color"], img_node.outputs["Color"])
 
 def finsh_object_materials(objects, texture_path, sod_materials):

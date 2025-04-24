@@ -6,12 +6,18 @@ from .SOD import SOD
 from . import Blender_SOD
 from . import Blender_Materials
 
+
 def guess_texture_path(file_path):
     SPLIT_FOLDER = "/sod/"
     split = file_path.split(SPLIT_FOLDER)
     if len(split) > 1:
         return split[0]+"/textures/rgb/"
+    else:
+        split = file_path.split("/textures/rgb/")
+        if len(split) > 1:
+            return split[0]+"/textures/rgb/"
     return ""
+
 
 class Import_STA_SOD(bpy.types.Operator, ImportHelper):
     bl_idname = "import_scene.sta_sod"
@@ -84,21 +90,26 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
             self.report({"ERROR"}, status[1])
             return {'CANCELLED'}
 
+
 def menu_func_sod_import(self, context):
     self.layout.operator(Import_STA_SOD.bl_idname, text="ST:Armada (.sod)")
 
+
 def menu_func_sod_export(self, context):
     self.layout.operator(Export_STA_SOD.bl_idname, text="ST:Armada (.sod)")
+
 
 def update_material_type(self, context):
     obj = context.active_object
     obj["material"] = self.material_type
     return
 
+
 def update_face_cull(self, context):
     obj = context.active_object
     obj["cull_type"] = int(self.face_cull)
     return
+
 
 def update_animated(self, context):
     obj = context.active_object
@@ -117,6 +128,7 @@ def update_animated(self, context):
         if "length" in obj:
             del obj["length"]
 
+
 def update_texture_animation(self, context):
     obj = context.active_object
     if self.texture_animated:
@@ -133,6 +145,7 @@ def update_texture_animation(self, context):
             del obj["ref_type"]
         if "ref_offset" in obj:
             del obj["ref_offset"]
+
 
 class STA_Dynamic_Node_Properties(PropertyGroup):
     material_type: EnumProperty(
@@ -152,9 +165,9 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
               " objects will be drawn quickly", 3),
             ('alpha ', "Use entire alpha channel",
              "Object will require sorting, so will have performance implications", 4),
-            ('wireframe', "Use wireframe graphics",
+            ('wireframe', "Wireframe",
              "Use wireframe graphics", 5),
-            ('wormhole', "Used by wormholes",
+            ('wormhole', "Wormhole",
              "Used by wormholes", 6),
         ])
     face_cull: EnumProperty(
@@ -187,7 +200,7 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
     )
 
 
-class STA_OP_UpdateMaterials(bpy.types.Operator):
+class STA_OP_UpdateMaterial(bpy.types.Operator):
     """Update Blender material"""
     bl_idname = "sta.update_material"
     bl_label = "Material update"
@@ -207,7 +220,6 @@ class STA_OP_UpdateMaterials(bpy.types.Operator):
             return {'CANCELLED'}
         
         material_name = mat.node_tree.nodes["ST:A Material"].node_tree.name
-
         new_mat_name = "{}.{}.{}.{}".format(
             material_name,
             obj.sta_dynamic_props.texture_name,
@@ -215,9 +227,16 @@ class STA_OP_UpdateMaterials(bpy.types.Operator):
             obj.sta_dynamic_props.material_type
         )
         if new_mat_name in bpy.data.materials:
-            new_mat_name += ".clone"
+            for slot in obj.material_slots:
+                if mat.name == slot.material.name:
+                    slot.material = bpy.data.materials[new_mat_name]
+            return {'FINISHED'}
 
-        mat.name = new_mat_name
+        new_mat = bpy.data.materials.new(new_mat_name)
+        new_mat.use_nodes = True
+        for slot in obj.material_slots:
+            if mat.name == slot.material.name:
+                slot.material = new_mat
         texture_path = ""
         if context.scene.sta_sod_file_path != "":
             texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
@@ -245,19 +264,18 @@ class STA_OP_Make_Material(bpy.types.Operator):
         obj = context.object
         mat = context.material
 
-        if obj.sta_dynamic_props.texture_name == "":
-            if not mat.use_nodes:
-                print("No texture in material nor object. Can't create material")
-                return {'CANCELLED'}
-            img_node = None
-            for node in mat.node_tree.nodes:
-                if node.type != "TEX_IMAGE":
-                    continue
-                img_node = node
-                break
-            if img_node is not None:
+        if not mat.use_nodes:
+            print("No texture in material nor object. Can't create material")
+            return {'CANCELLED'}
+        img_node = None
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE":
+                continue
+            img_node = node
+            break
+        if img_node is not None:
+            if obj.sta_dynamic_props.texture_name == "":
                 obj.sta_dynamic_props.texture_name = img_node.image.name.split(".")[0]
-                mat.node_tree.nodes.remove(img_node)
 
         new_mat_name = "{}.{}.{}.{}".format(
             mat.name.split(".")[0],
@@ -266,9 +284,16 @@ class STA_OP_Make_Material(bpy.types.Operator):
             obj.sta_dynamic_props.material_type
         )
         if new_mat_name in bpy.data.materials:
-            bpy.data.materials[new_mat_name].name += ".01"
+            for slot in obj.material_slots:
+                if mat.name == slot.material.name:
+                    slot.material = bpy.data.materials[new_mat_name]
+            return {'FINISHED'}
         
-        mat.name = new_mat_name
+        new_mat = bpy.data.materials.new(new_mat_name)
+        new_mat.use_nodes = True
+        for slot in obj.material_slots:
+            if mat.name == slot.material.name:
+                slot.material = new_mat
         texture_path = ""
         if context.scene.sta_sod_file_path != "":
             texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
@@ -334,6 +359,73 @@ class STA_OP_ChangeNodeType(bpy.types.Operator):
             obj["emitter"] = ""
         obj["node_type"] = self.node_type
         return {'FINISHED'}
+    
+
+def update_object_materials(obj, context):
+    texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
+    materials = set()
+    for mat in obj.data.materials:
+        materials.add(mat)
+    for mat in materials:
+        new_mat_name = "{}.{}.{}.{}".format(
+            mat.name.split(".")[0],
+            obj.sta_dynamic_props.texture_name,
+            obj.sta_dynamic_props.face_cull,
+            obj.sta_dynamic_props.material_type
+        )
+        if new_mat_name in bpy.data.materials:
+            for slot in obj.material_slots:
+                if mat.name == slot.material.name:
+                    slot.material = bpy.data.materials[new_mat_name]
+            continue
+
+        new_mat = bpy.data.materials.new(new_mat_name)
+        new_mat.use_nodes = True
+        for slot in obj.material_slots:
+            if mat.name == slot.material.name:
+                slot.material = new_mat
+        Blender_Materials.finish_mat(new_mat, texture_path, [])
+    return
+
+
+class STA_OP_UpdateObjectMaterials(bpy.types.Operator):
+    """Updates all object materials"""
+    bl_idname = "sta.udpate_all_object_materials"
+    bl_label = "Update materials"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    node_type: IntProperty()
+
+    def execute(self, context):
+        update_object_materials(context.object, context)
+        return {'FINISHED'}
+
+
+class STA_OP_LoadMeshTexture(bpy.types.Operator):
+    """Loads an image and sets the meshes material textures"""
+    bl_idname = "sta.load_mesh_texture"
+    bl_label = "Load new texture"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    filepath: StringProperty(subtype='FILE_PATH', options={'SKIP_SAVE'})
+    filename_ext = ".tga"
+    filter_glob: StringProperty(default="*.tga", options={'HIDDEN'})
+
+    def execute(self, context):
+        sanitized_path = self.filepath.replace("\\", "/")
+        texture = sanitized_path.rsplit("/", 1)[1]
+        if texture.lower().endswith(".tga"):
+            texture = texture[:-len(".tga")]
+        obj = context.object
+        obj.sta_dynamic_props.texture_name = texture
+        if context.scene.sta_sod_file_path == "":
+            context.scene.sta_sod_file_path = sanitized_path
+
+        update_object_materials(obj, context)
+
+        return {'FINISHED'}
+    
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
 
 class STA_PT_EntityPanel(bpy.types.Panel):
@@ -412,6 +504,9 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         layout.prop(obj.sta_dynamic_props, "material_type")
         layout.prop(obj.sta_dynamic_props, "face_cull")
         layout.prop(obj.sta_dynamic_props, "texture_name")
+        row = layout.row()
+        row.operator("sta.udpate_all_object_materials")
+        row.operator("sta.load_mesh_texture")
 
         layout.separator()
         layout.prop(obj.sta_dynamic_props, "texture_animated")
@@ -427,6 +522,7 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             if "ref_offset" in obj:
                 row = layout.row()
                 row.prop(obj, '["ref_offset"]', text = "Offset")
+
 
 class STA_OP_Toggle_Material_Export(bpy.types.Operator):
     """Toggles material export"""
@@ -444,6 +540,7 @@ class STA_OP_Toggle_Material_Export(bpy.types.Operator):
             node_group.nodes["ST:A_Export"].outputs[0].default_value = 1.0
         return {'FINISHED'}
 
+
 class STA_OP_Delete_Material(bpy.types.Operator):
     """Delete unused Material"""
     bl_idname = "sta.delete_material"
@@ -455,6 +552,7 @@ class STA_OP_Delete_Material(bpy.types.Operator):
         bpy.data.node_groups.remove(
             bpy.data.node_groups[self.name])
         return {'FINISHED'}
+
 
 class STA_PT_MaterialExportPanel(bpy.types.Panel):
     bl_idname = "STA_PT_material_export_panel"
