@@ -2,19 +2,44 @@ import bpy
 from . import Blender_Material_Nodes
 from mathutils import Vector
 
+def set_material_drivers(mat_node):
+    material_group = mat_node.node_tree
+    values = ("Specular Power", "Lighting Model")
+    for v in values:
+        driver = mat_node.inputs[v].driver_add("default_value")
+        var = driver.driver.variables.new()
+        var.name = v.replace(" ", "")
+        var.type = 'SINGLE_PROP'
+        var.targets[0].id_type = "NODETREE"
+        var.targets[0].id = material_group
+        var.targets[0].data_path = 'interface.items_tree["{}"].default_value'.format(v)
+        driver.driver.expression = var.name
+
+    values = ("Ambient Color", "Diffuse Color", "Specular Color")
+    for v in values:
+        driver = mat_node.inputs[v].driver_add("default_value")
+        for i in range(3):
+            var = driver[i].driver.variables.new()
+            var.name = v.replace(" ", "")
+            var.type = 'SINGLE_PROP'
+            var.targets[0].id_type = "NODETREE"
+            var.targets[0].id = material_group
+            var.targets[0].data_path = 'interface.items_tree["{}"].default_value[{}]'.format(v, i)
+            driver[i].driver.expression = var.name
+
 def set_material_custom_properties(mat_node, sod_mat):
     material_group = mat_node.node_tree
 
-    mat_node.inputs["Ambient Color"].default_value =  [*(sod_mat.ambient), 1.0]
-    mat_node.inputs["Diffuse Color"].default_value =  [*(sod_mat.diffuse), 1.0]
-    mat_node.inputs["Specular Color"].default_value =  [*(sod_mat.specular), 1.0]
-    mat_node.inputs["Specular Power"].default_value =  sod_mat.specular_power
-    mat_node.inputs["Lighting Model"].default_value =  sod_mat.lighting_model
+    material_group.interface.items_tree["Ambient Color"].default_value =  [*(sod_mat.ambient), 1.0]
+    material_group.interface.items_tree["Diffuse Color"].default_value =  [*(sod_mat.diffuse), 1.0]
+    material_group.interface.items_tree["Specular Color"].default_value =  [*(sod_mat.specular), 1.0]
+    material_group.interface.items_tree["Specular Power"].default_value =  sod_mat.specular_power
+    material_group.interface.items_tree["Lighting Model"].default_value =  sod_mat.lighting_model
 
     if "ST:A_Export" in material_group.nodes:
         material_group.nodes["ST:A_Export"].outputs[0].default_value = 1.0
 
-def finish_mat(mat, texture_path, sod_materials):
+def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = None):
     mat.use_nodes = True
     out_node = None
     for node in mat.node_tree.nodes.values():
@@ -28,23 +53,30 @@ def finish_mat(mat, texture_path, sod_materials):
     out_node.inputs["IOR"].default_value = 1.0
     out_node.inputs["Emission Strength"].default_value = 1.0
 
-    img_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+    if img_node is None:
+        img_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
     material = ""
     type = "default"
     try:
-        material, image_name, cull, type = mat.name.split(".")
+        props = mat.name.split(".")
+        if len(props) == 4:
+            material, image_name, cull, type = props
+        elif len(props) == 5 and props[4] == "clone":
+            material, image_name, cull, type = props[:4]
         image = bpy.data.images.get(image_name + ".tga")
         if image is None:
             image = bpy.data.images.load(texture_path + image_name + ".tga")
         img_node.image = image
         img_node.location = out_node.location + Vector([ -1200, 0])
         mat.use_backface_culling = True if cull == "1" else False
-    except:
+    except Exception as e:
+        print(e)
         print("Could not find image file for material:", mat.name)
 
     thresholded = False
     if material != "":
-        mat_node = mat.node_tree.nodes.new(type="ShaderNodeGroup")
+        if mat_node is None:
+            mat_node = mat.node_tree.nodes.new(type="ShaderNodeGroup")
         mat_node.node_tree = Blender_Material_Nodes.Material_Node.get_node_tree(material)
         mat_node.name = "ST:A Material"
         mat.node_tree.links.new(mat_node.inputs[0], img_node.outputs["Color"])
@@ -55,6 +87,7 @@ def finish_mat(mat, texture_path, sod_materials):
             set_material_custom_properties(mat_node, sod_materials[material])
             if sod_materials[material].lighting_model != 0:
                 thresholded = True
+        set_material_drivers(mat_node)
 
     if type == "alpha":
         mat.node_tree.links.new(out_node.inputs["Alpha"], img_node.outputs["Alpha"])

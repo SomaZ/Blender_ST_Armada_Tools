@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Star Trek Armada Tools",
     "author": "SomaZ",
-    "version": (0, 8, 1),
+    "version": (0, 9, 0),
     "description": "Importer/Exporter for Star Trek Armada sod files",
     "blender": (4, 1, 0),
     "location": "File > Import-Export",
@@ -73,8 +73,14 @@ classes = (STAAddonPreferences,
            UI.STA_Dynamic_Node_Properties,
            UI.Import_STA_SOD,
            UI.Export_STA_SOD,
+           UI.STA_OP_UpdateMaterials,
            UI.STA_PT_Materialpanel,
+           UI.STA_OP_ChangeNodeType,
            UI.STA_PT_EntityPanel,
+           UI.STA_OP_Toggle_Material_Export,
+           UI.STA_OP_Make_Material,
+           UI.STA_OP_Delete_Material,
+           UI.STA_PT_MaterialExportPanel,
            )
 
 def register():

@@ -435,11 +435,11 @@ def Export_SOD(file_path, version = 1.8):
 
         new_sod.materials[mat_node.node_tree.name] = Material(
             mat_node.node_tree.name,
-            tuple(mat_node.inputs["Ambient Color"].default_value[:3]),
-            tuple(mat_node.inputs["Diffuse Color"].default_value[:3]),
-            tuple(mat_node.inputs["Specular Color"].default_value[:3]),
-            mat_node.inputs["Specular Power"].default_value,
-            mat_node.inputs["Lighting Model"].default_value
+            tuple(mat_node.node_tree.interface.items_tree["Ambient Color"].default_value[:3]),
+            tuple(mat_node.node_tree.interface.items_tree["Diffuse Color"].default_value[:3]),
+            tuple(mat_node.node_tree.interface.items_tree["Specular Color"].default_value[:3]),
+            mat_node.node_tree.interface.items_tree["Specular Power"].default_value,
+            mat_node.node_tree.interface.items_tree["Lighting Model"].default_value
         )
     
     if "root" not in bpy.context.scene.objects:

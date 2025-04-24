@@ -11,7 +11,7 @@ def guess_texture_path(file_path):
     split = file_path.split(SPLIT_FOLDER)
     if len(split) > 1:
         return split[0]+"/textures/rgb/"
-    return None
+    return ""
 
 class Import_STA_SOD(bpy.types.Operator, ImportHelper):
     bl_idname = "import_scene.sta_sod"
@@ -187,6 +187,102 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
     )
 
 
+class STA_OP_UpdateMaterials(bpy.types.Operator):
+    """Update Blender material"""
+    bl_idname = "sta.update_material"
+    bl_label = "Material update"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    name: StringProperty()
+
+    def execute(self, context):
+        obj = context.object
+        mat = context.material
+
+        if not mat.use_nodes:
+            print("No nodes in material found")
+            return {'CANCELLED'}
+        
+        if "ST:A Material" not in mat.node_tree.nodes:
+            print("No ST:A Material found")
+            return {'CANCELLED'}
+        
+        material_name = mat.node_tree.nodes["ST:A Material"].node_tree.name
+
+        new_mat_name = "{}.{}.{}.{}".format(
+            material_name,
+            obj.sta_dynamic_props.texture_name,
+            obj.sta_dynamic_props.face_cull,
+            obj.sta_dynamic_props.material_type
+        )
+        if new_mat_name in bpy.data.materials:
+            new_mat_name += ".clone"
+
+        mat.name = new_mat_name
+        texture_path = ""
+        if context.scene.sta_sod_file_path != "":
+            texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
+
+        img_node = None
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE":
+                continue
+            img_node = node
+            break
+    
+        mat_node = mat.node_tree.nodes["ST:A Material"]
+        Blender_Materials.finish_mat(mat, texture_path, [], img_node, mat_node)
+
+        return {'FINISHED'}
+
+
+class STA_OP_Make_Material(bpy.types.Operator):
+    """Create new material"""
+    bl_idname = "sta.make_material"
+    bl_label = "New"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+
+    def execute(self, context):
+        obj = context.object
+        mat = context.material
+
+        if obj.sta_dynamic_props.texture_name == "":
+            if not mat.use_nodes:
+                print("No texture in material nor object. Can't create material")
+                return {'CANCELLED'}
+            img_node = None
+            for node in mat.node_tree.nodes:
+                if node.type != "TEX_IMAGE":
+                    continue
+                img_node = node
+                break
+            if img_node is not None:
+                obj.sta_dynamic_props.texture_name = img_node.image.name.split(".")[0]
+                mat.node_tree.nodes.remove(img_node)
+
+        new_mat_name = "{}.{}.{}.{}".format(
+            mat.name.split(".")[0],
+            obj.sta_dynamic_props.texture_name,
+            obj.sta_dynamic_props.face_cull,
+            obj.sta_dynamic_props.material_type
+        )
+        if new_mat_name in bpy.data.materials:
+            bpy.data.materials[new_mat_name].name += ".01"
+        
+        mat.name = new_mat_name
+        texture_path = ""
+        if context.scene.sta_sod_file_path != "":
+            texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
+
+        Blender_Materials.finish_mat(mat, texture_path, [])
+        if "ST:A Material" not in mat.node_tree.nodes:
+            return {'FINISHED'}
+        mat_nt = mat.node_tree.nodes["ST:A Material"].node_tree
+        if "ST:A_Export" in mat_nt.nodes:
+            mat_nt.nodes["ST:A_Export"].outputs[0].default_value = 1.0
+
+        return {'FINISHED'}
+
+
 class STA_PT_Materialpanel(bpy.types.Panel):
     bl_idname = "STA_PT_Materialpanel"
     bl_label = "ST: Armada Material"
@@ -201,24 +297,43 @@ class STA_PT_Materialpanel(bpy.types.Panel):
             return
         
         if "ST:A Material" not in mat.node_tree.nodes:
-            # Add material operator with name input
+            layout.operator("sta.make_material", text="Make new material")
             return
 
         material_node = mat.node_tree.nodes["ST:A Material"]
 
-        layout.label(text = material_node.node_tree.name)
+        row = layout.row()
+        row.prop(material_node.node_tree, "name", text = "")
+        row = row.row()
+        row.ui_units_x = 1
+        row.operator("sta.update_material", text="", icon="CHECKMARK").name = material_node.node_tree.name
         if material_node is not None:
             col = layout.column()
-            ambient = material_node.inputs["Ambient Color"]
+            ambient = material_node.node_tree.interface.items_tree["Ambient Color"]
             col.prop(ambient, "default_value", text="Ambient Color")
-            diffuse = material_node.inputs["Diffuse Color"]
+            diffuse = material_node.node_tree.interface.items_tree["Diffuse Color"]
             col.prop(diffuse, "default_value", text="Diffuse Color")
-            specular = material_node.inputs["Specular Color"]
+            specular = material_node.node_tree.interface.items_tree["Specular Color"]
             col.prop(specular, "default_value", text="Specular Color")
-            specular = material_node.inputs["Specular Power"]
+            specular = material_node.node_tree.interface.items_tree["Specular Power"]
             col.prop(specular, "default_value", text="Specular Power")
-            model = material_node.inputs["Lighting Model"]
+            model = material_node.node_tree.interface.items_tree["Lighting Model"]
             col.prop(model, "default_value", text="Lighting Model")
+
+
+class STA_OP_ChangeNodeType(bpy.types.Operator):
+    """Changes node type"""
+    bl_idname = "sta.change_node_type"
+    bl_label = "Change"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    node_type: IntProperty()
+
+    def execute(self, context):
+        obj = context.object
+        if self.node_type == 12 and "emitter" not in obj:
+            obj["emitter"] = ""
+        obj["node_type"] = self.node_type
+        return {'FINISHED'}
 
 
 class STA_PT_EntityPanel(bpy.types.Panel):
@@ -263,7 +378,16 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             return
 
         row.label(text = node_match[node_type])
-        #row.prop(obj, '["node_type"]')
+        if node_type == 0:
+            row.operator("sta.change_node_type", text = "Make Sprite").node_type = 3
+            row.operator("sta.change_node_type", text = "Make Emitter").node_type = 12
+        elif node_type == 3:
+            row.operator("sta.change_node_type", text = "Make Null").node_type = 0
+            row.operator("sta.change_node_type", text = "Make Emitter").node_type = 12
+        elif node_type == 12:
+            row.operator("sta.change_node_type", text = "Make Sprite").node_type = 3
+            row.operator("sta.change_node_type", text = "Make Null").node_type = 0
+
         # Add operators to change node type
         layout.separator()
         layout.prop(obj.sta_dynamic_props, "animated")
@@ -283,10 +407,11 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             row = layout.row()
             row.prop(obj, '["emitter"]')
             return
-        if node_type == 1:
-            layout.prop(obj.sta_dynamic_props, "material_type")
-            layout.prop(obj.sta_dynamic_props, "face_cull")
-            layout.prop(obj.sta_dynamic_props, "texture_name")
+        if node_type != 1:
+            return
+        layout.prop(obj.sta_dynamic_props, "material_type")
+        layout.prop(obj.sta_dynamic_props, "face_cull")
+        layout.prop(obj.sta_dynamic_props, "texture_name")
 
         layout.separator()
         layout.prop(obj.sta_dynamic_props, "texture_animated")
@@ -303,3 +428,61 @@ class STA_PT_EntityPanel(bpy.types.Panel):
                 row = layout.row()
                 row.prop(obj, '["ref_offset"]', text = "Offset")
 
+class STA_OP_Toggle_Material_Export(bpy.types.Operator):
+    """Toggles material export"""
+    bl_idname = "sta.toggle_material_export"
+    bl_label = "Toggle Export"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    name: StringProperty()
+
+    def execute(self, context):
+        node_group = bpy.data.node_groups[self.name]
+        on = node_group.nodes["ST:A_Export"].outputs[0].default_value > 0
+        if on:
+            node_group.nodes["ST:A_Export"].outputs[0].default_value = 0.0
+        else:
+            node_group.nodes["ST:A_Export"].outputs[0].default_value = 1.0
+        return {'FINISHED'}
+
+class STA_OP_Delete_Material(bpy.types.Operator):
+    """Delete unused Material"""
+    bl_idname = "sta.delete_material"
+    bl_label = "Delete"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    name: StringProperty()
+
+    def execute(self, context):
+        bpy.data.node_groups.remove(
+            bpy.data.node_groups[self.name])
+        return {'FINISHED'}
+
+class STA_PT_MaterialExportPanel(bpy.types.Panel):
+    bl_idname = "STA_PT_material_export_panel"
+    bl_label = "Material Export"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ST: Armada"
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.active_object
+
+        addon_name = __name__.split('.')[0]
+        prefs = context.preferences.addons[addon_name].preferences
+
+        for node_group in bpy.data.node_groups:
+            row = layout.row()
+            if not node_group.nodes or "ST:A_Export" not in node_group.nodes:
+                continue
+            export_status = node_group.nodes["ST:A_Export"].outputs[0].default_value > 0.0
+            users = row.row()
+            users.label(text = "[{}]".format(node_group.users))
+            users.ui_units_x = 1
+            row.prop(node_group, "name", text = "", icon = "CHECKMARK" if export_status else "X")
+            row = row.row()
+            row.ui_units_x = 10
+            row.operator(
+                "sta.toggle_material_export", text="Toggle Export").name = node_group.name
+            if node_group.users == 0:
+                row.operator(
+                    "sta.delete_material", text="", icon="X").name = node_group.name
