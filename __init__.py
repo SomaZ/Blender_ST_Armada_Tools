@@ -83,6 +83,9 @@ classes = (STAAddonPreferences,
            UI.STA_OP_Make_Material,
            UI.STA_OP_Delete_Material,
            UI.STA_PT_MaterialExportPanel,
+           UI.STA_OP_Create_default_rig,
+           UI.STA_OP_Parent_to,
+           UI.STA_PT_HelperPanel,
            )
 
 def register():

@@ -614,3 +614,102 @@ class STA_PT_MaterialExportPanel(bpy.types.Panel):
             if node_group.users == 0:
                 row.operator(
                     "sta.delete_material", text="", icon="X").name = node_group.name
+
+
+STA_NODES = (
+    "root", "Geometry", "Hardpoints", "Lights",
+    "Damage", "Borg", "Crew", "Engines", "Life",
+    "Sensors", "Shield", "Target"
+    )
+
+
+class STA_OP_Create_default_rig(bpy.types.Operator):
+    """Creates a default SOD rig"""
+    bl_idname = "sta.create_rig"
+    bl_label = "Create default rig"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+
+    def execute(self, context):
+        parenting = {
+            "Geometry": "root",
+            "Damage": "root",
+            "Hardpoints": "root",
+            "Lights": "root",
+            "Geometry": "root",
+            "Borg": "Damage",
+            "Crew": "Damage",
+            "Engines": "Damage",
+            "Life": "Damage",
+            "Sensors": "Damage",
+            "Shield": "Damage",
+            "Target": "Damage"
+        }
+        for node in STA_NODES:
+            if node in context.scene.objects:
+                continue
+            bpy.ops.object.empty_add(type="ARROWS")
+            obj = context.object
+            obj.name = node
+        for p in parenting:
+            if p not in context.scene.objects:
+                if p.lower() not in context.scene.objects:
+                    print("Couldn't find parent", p)
+                    continue
+                context.scene.objects[p.lower()].name = p
+            if parenting[p] not in context.scene.objects:
+                if parenting[p].lower() not in context.scene.objects:
+                    print("Couldn't find node to parent", parenting[p])
+                    continue
+                context.scene.objects[parenting[p].lower()].name = parenting[p]
+            context.scene.objects[p].parent = context.scene.objects[parenting[p]]
+        return {'FINISHED'}
+    
+
+class STA_OP_Parent_to(bpy.types.Operator):
+    """Parent selected objects to node"""
+    bl_idname = "sta.parent_to"
+    bl_label = "Parent"
+    bl_options = {"UNDO", "INTERNAL", "REGISTER"}
+    parent: StringProperty()
+
+    def execute(self, context):
+        if self.parent not in context.scene.objects:
+            if self.parent.lower() not in context.scene.objects:
+                return {'CANCELLED'}
+            parent = context.scene.objects[self.parent.lower()]
+        else:
+            parent = context.scene.objects[self.parent]
+        selected_objs = context.selected_objects
+        for obj in selected_objs:
+            mat = obj.matrix_world.copy()
+            obj.parent = parent
+            obj.matrix_world = mat
+        return {'FINISHED'}
+
+
+class STA_PT_HelperPanel(bpy.types.Panel):
+    bl_idname = "STA_PT_helper_panel"
+    bl_label = "Helpers"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "ST: Armada"
+
+    def draw(self, context):
+        layout = self.layout
+        
+        if "root" not in context.scene.objects:
+            layout.operator("sta.create_rig")
+
+        for node in STA_NODES[1:]:
+            if node == "Damage":
+                layout.label(text="Damage Nodes:")
+                continue
+            node_name = node
+            if node not in context.scene.objects:
+                if node.lower() not in context.scene.objects:
+                    continue
+                node_name = node.lower()
+            if context.scene.objects[node_name].type != "EMPTY":
+                layout.label(text="{} is not a valid Node (Maybe an object?)".format(node_name))
+                continue
+            layout.operator("sta.parent_to", text="Parent to {}".format(node)).parent = node
