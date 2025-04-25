@@ -794,18 +794,20 @@ Warning: Currently opened file will be lost"""
             emitter_obj.name = emitter
             emitter_obj["node_type"] = 12
             emitter_obj["emitter"] = emitter
+            emitter_obj.show_name = True
 
             emitter_obj.asset_mark()
             emitter_obj.asset_data.catalog_id = a_categorys["Star Trek Armada/Emitters"]
 
         for sprite in sprites:
             bpy.ops.object.empty_add(type="ARROWS")
-            emitter_obj = bpy.context.object
-            emitter_obj.name = sprite
-            emitter_obj["node_type"] = 3
+            sprite_obj = bpy.context.object
+            sprite_obj.name = sprite
+            sprite_obj["node_type"] = 3
+            sprite_obj.show_name = True
 
-            emitter_obj.asset_mark()
-            emitter_obj.asset_data.catalog_id = a_categorys["Star Trek Armada/Sprites"]
+            sprite_obj.asset_mark()
+            sprite_obj.asset_data.catalog_id = a_categorys["Star Trek Armada/Sprites"]
 
         bpy.ops.wm.save_as_mainfile(filepath=prefs.assetlibrary+"/"+"sprites_and_emitters.blend")
         return {'FINISHED'}
