@@ -86,6 +86,7 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             image = bpy.data.images.load(texture_path + image_name + ".tga")
         img_node.image = image
         img_node.location = out_node.location + Vector([ -1200, 0])
+        img_node.image.alpha_mode = 'CHANNEL_PACKED'
         mat.use_backface_culling = True if cull == "1" else False
     except Exception as e:
         print(e)
@@ -129,6 +130,12 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             mat.node_tree.links.new(add_node.outputs[0], mat_out_node.inputs[0])
         mat.blend_method = "BLEND"
     elif type == "translucent": # Untested, need to find examples where this is even used
+        math_mult = mat.node_tree.nodes.new(type="ShaderNodeMath")
+        math_mult.operation = "MULTIPLY"
+        math_mult.inputs[1].default_value = 0.5
+        math_mult.location = out_node.location + Vector([ -400, 0])
+        mat.node_tree.links.new(out_node.inputs["Alpha"], math_mult.outputs[0])
+        mat.node_tree.links.new(math_mult.inputs[0], img_node.outputs["Alpha"])
         out_node.inputs["Alpha"].default_value = 0.5
         mat.blend_method = "BLEND"
     elif type == "wireframe":
