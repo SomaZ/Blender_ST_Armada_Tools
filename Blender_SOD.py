@@ -32,8 +32,9 @@ def mat34_to_blender(mat34):
     matrix.row[0] *= -1.0
     return matrix
 
-def mat34_from_blender(matrix):
+def mat34_from_blender(matrix, scale = Vector((1.0, 1.0, 1.0))):
     export_matrix = matrix.copy()
+    export_matrix.col[3] *= Vector((*scale, 1.0))
     export_matrix.row[0] *= -1.0
     export_matrix.col[0] *= -1.0
     mat34 = [0.0]*12
@@ -369,15 +370,17 @@ def Make_meshes_from_objects(objects):
 def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
     world_mat = obj.matrix_world
     parent_name = ""
+    scale = Vector((1.0, 1.0, 1.0))
     if obj.parent:
         parent_name = obj.parent.name
+        _, _, scale = obj.parent.matrix_world.decompose()
         world_mat = obj.parent.matrix_world.inverted() @ world_mat
         if parent_name == "root":
             world_mat = inverse_rot_mat @ world_mat
     else:
         world_mat = Matrix.Identity(4)
 
-    mat34 = mat34_from_blender(world_mat)
+    mat34 = mat34_from_blender(world_mat, scale)
     node_type = 0
     if "node_type" in obj:
         node_type = int(obj["node_type"])
@@ -485,14 +488,16 @@ def Export_SOD(file_path, version = 1.8):
         for i in range(int(obj["start_frame"]), int(obj["end_frame"]) + 1):
             bpy.context.scene.frame_set(i)
             world_mat = obj.matrix_world
+            scale = Vector((1.0, 1.0, 1.0))
             if obj.parent:
+                _, _, scale = obj.parent.matrix_world.decompose()
                 world_mat = obj.parent.matrix_world.inverted() @ world_mat
                 if obj.parent.name == "root":
                     world_mat = inverse_rot_mat @ world_mat
             else:
                 world_mat = Matrix.Identity(4)
 
-            mat34 = mat34_from_blender(world_mat)
+            mat34 = mat34_from_blender(world_mat, scale)
             matrices.append(mat34)
 
         new_sod.channels[obj.name] = Animation_channel(
