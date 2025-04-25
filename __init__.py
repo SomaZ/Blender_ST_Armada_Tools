@@ -58,13 +58,34 @@ class STAAddonPreferences(bpy.types.AddonPreferences):
         maxlen=2048,
     )
 
+    def assetslibs_list_cb(self, context):
+        if bpy.app.version >= (3, 0, 0):
+            libs = context.preferences.filepaths.asset_libraries
+            return [(lib.path, lib.name, "")
+                    for lib in libs]
+        else:
+            return []
+
+    assetlibrary: bpy.props.EnumProperty(
+        items=assetslibs_list_cb,
+        name="Asset Library",
+        description="Asset library to use for storing sprites and emitters"
+    )
+
     def draw(self, context):
         layout = self.layout
         row = layout.row()
         row.prop(self, "default_image_path")
+        if bpy.app.version < (3, 0, 0):
+            return
+        layout.separator()
+        row = layout.row()
+        row.prop(self, "assetlibrary")
+        row.operator("sta.fill_asset_lib", text="Fill with sprites and emitters")
 
 
-classes = (STAAddonPreferences,
+classes = (UI.STA_OP_FillAssetLibrary,
+           STAAddonPreferences,
            UI.STA_Dynamic_Node_Properties,
            UI.Import_STA_SOD,
            UI.Export_STA_SOD,

@@ -369,10 +369,11 @@ def Make_meshes_from_objects(objects):
 
 def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
     world_mat = obj.matrix_world
+    obj_name = obj.name.replace(".", "_")
     parent_name = ""
     scale = Vector((1.0, 1.0, 1.0))
     if obj.parent:
-        parent_name = obj.parent.name
+        parent_name = obj.parent.name.replace(".", "_")
         _, _, scale = obj.parent.matrix_world.decompose()
         world_mat = obj.parent.matrix_world.inverted() @ world_mat
         if parent_name == "root":
@@ -393,13 +394,13 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
     
     if node_type == 12:
         if "emitter" in obj and len(obj["emitter"]) > 0:
-            nodes[obj.name] = Node(
-            type = node_type,
-            name = obj.name,
-            root = parent_name,
-            mat34=mat34,
-            emitter = str(obj["emitter"])
-            )
+            nodes[obj_name] = Node(
+                type = node_type,
+                name = obj_name,
+                root = parent_name,
+                mat34=mat34,
+                emitter = str(obj["emitter"])
+                )
         else:
             print("Emitter type without emitter set")
     elif node_type == 1:
@@ -407,17 +408,17 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
             texture_animated_objects.append(obj)
 
         new_mesh = Make_meshes_from_objects([obj])[0]
-        nodes[obj.name] = Node(
+        nodes[obj_name] = Node(
             type = node_type,
-            name = obj.name,
+            name = obj_name,
             root = parent_name,
             mat34=mat34,
             mesh=new_mesh
         )
     else:
-        nodes[obj.name] = Node(
+        nodes[obj_name] = Node(
             type = node_type,
-            name = obj.name,
+            name = obj_name,
             root = parent_name,
             mat34=mat34
         )

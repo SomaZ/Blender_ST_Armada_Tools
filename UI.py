@@ -1,4 +1,5 @@
 import bpy
+import os, uuid
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty
 from bpy.types import PropertyGroup
@@ -698,3 +699,105 @@ class STA_PT_HelperPanel(bpy.types.Panel):
                 layout.label(text="{} is not a valid Node (Maybe an object?)".format(node_name))
                 continue
             layout.operator("sta.parent_to", text="Parent to {}".format(node)).parent = node
+
+
+class STA_OP_FillAssetLibrary(bpy.types.Operator):
+    """Imports all sod files from a path and stores found sprites and emitters in an asset library
+Warning: Currently opened file will be lost"""
+    bl_idname = "sta.fill_asset_lib"
+    bl_label = "Fill asset library with sprites and emitters"
+    bl_options = {"INTERNAL", "REGISTER"}
+
+    filepath: StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE'})
+
+    def execute(self, context):
+        if bpy.app.version < (3, 0, 0):
+            return {'CANCELLED'}
+
+        log = []
+        addon_name = __name__.split('.')[0]
+        prefs = context.preferences.addons[addon_name].preferences
+
+        asset_library_path = prefs.assetlibrary.replace("\\", "/")
+
+        cats_f = "{}/blender_assets.cats.txt".format(asset_library_path)
+        os.makedirs(asset_library_path, exist_ok=True)
+        a_categorys = {}
+        add_version_to_cats = False
+        if os.path.isfile(cats_f):
+            with open(cats_f, "r") as f:
+                for line in f.readlines():
+                    if line.startswith(("#", "VERSION", "\n")):
+                        continue
+                    c_uuid, path, name = line.split(":")
+                    a_categorys[path] = c_uuid
+        else:
+            add_version_to_cats = True
+
+        categories = ("Sprites", "Emitters")
+        for cat in categories:
+            current_path = "Star Trek Armada/{}".format(cat)
+            if current_path not in a_categorys:
+                a_categorys[current_path] = None
+
+        with open(cats_f, "a+") as f:
+            if add_version_to_cats:
+                f.write("VERSION 1\n")
+            for cat in a_categorys:
+                if a_categorys[cat] is None:
+                    a_categorys[cat] = str(uuid.uuid4())
+                    split_cat = cat.split("/")
+                    f.write(":".join((a_categorys[cat], cat, split_cat[len(split_cat)-1])))
+                    f.write("\n")
+
+        maps_files = os.listdir(self.filepath)
+        sod_list = [self.filepath + file_path 
+                        for file_path in maps_files
+                        if file_path.lower().endswith('.sod')]
+        
+        emitters = set()
+        sprites = set()
+        for sod_file in sod_list:
+            try:
+                sod = SOD.from_file_path(sod_file)
+            except Exception:
+                continue
+            for node in sod.nodes.values():
+                if node.type == 12:
+                    emitters.add(node.emitter.strip().lower())
+                    continue
+                if node.type == 3:
+                    sprites.add(node.name.strip().lower().split("_")[0])
+        
+        for emitter in emitters:
+            bpy.ops.object.empty_add(type="ARROWS")
+            emitter_obj = bpy.context.object
+            emitter_obj.name = emitter
+            emitter_obj["node_type"] = 12
+            emitter_obj["emitter"] = emitter
+
+            emitter_obj.asset_mark()
+            emitter_obj.asset_data.catalog_id = a_categorys["Star Trek Armada/Emitters"]
+
+        for sprite in sprites:
+            bpy.ops.object.empty_add(type="ARROWS")
+            emitter_obj = bpy.context.object
+            emitter_obj.name = sprite
+            emitter_obj["node_type"] = 3
+
+            emitter_obj.asset_mark()
+            emitter_obj.asset_data.catalog_id = a_categorys["Star Trek Armada/Sprites"]
+
+        bpy.ops.wm.save_as_mainfile(filepath=prefs.assetlibrary+"/"+"sprites_and_emitters.blend")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        addon_name = __name__.split('.')[0]
+        prefs = context.preferences.addons[addon_name].preferences
+
+        texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
+        if texture_path != "":
+            self.directory = texture_path
+
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
