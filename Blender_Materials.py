@@ -114,7 +114,8 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             break
 
     if type == "alpha":
-        mat.blend_method = "OPAQUE"
+        mat.node_tree.links.new(out_node.inputs["Alpha"], img_node.outputs["Alpha"])
+        mat.blend_method = "HASHED"
     elif type == "additive":
         transparent_node = mat.node_tree.nodes.new(type="ShaderNodeBsdfTransparent")
         transparent_node.location = out_node.location + Vector([ 0, 200])
