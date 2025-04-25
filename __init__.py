@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Star Trek Armada Tools",
     "author": "SomaZ",
-    "version": (0, 9, 0),
+    "version": (0, 9, 9),
     "description": "Importer/Exporter for Star Trek Armada sod files",
     "blender": (4, 1, 0),
     "location": "File > Import-Export",
@@ -50,24 +50,19 @@ else:
 class STAAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __name__
 
-    normal_map_option: bpy.props.EnumProperty(
-        name="Normal Map Import",
-        description="Choose whether to import normal maps and what format to expect",
-        default="DirectX",
-        items=[
-            ("OpenGL", "OpenGL",
-             "Import normal maps in OpenGL format", 0),
-            ("DirectX", "DirectX",
-             "Import normal maps in DirectX format", 1),
-            ("Skip", "Skip",
-             "Skip normal map import", 2)
-        ]
+    default_image_path: bpy.props.StringProperty(
+        name="Default image path",
+        description="Folder to look for images",
+        default="",
+        subtype="DIR_PATH",
+        maxlen=2048,
     )
 
     def draw(self, context):
         layout = self.layout
         row = layout.row()
-        row.prop(self, "normal_map_option")
+        row.prop(self, "default_image_path")
+
 
 classes = (STAAddonPreferences,
            UI.STA_Dynamic_Node_Properties,
@@ -88,6 +83,7 @@ classes = (STAAddonPreferences,
            UI.STA_PT_HelperPanel,
            )
 
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -99,9 +95,7 @@ def register():
     bpy.types.Scene.sta_sod_file_path = bpy.props.StringProperty(
         name="ST: Armada SOD file path",
         description="Full path to the last imported sod File")
-    
-    addon_name = __name__.split('.')[0]
-    prefs = bpy.context.preferences.addons[addon_name].preferences
+
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(UI.menu_func_sod_import)

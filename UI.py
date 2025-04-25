@@ -16,6 +16,11 @@ def guess_texture_path(file_path):
         split = file_path.split("/textures/rgb/")
         if len(split) > 1:
             return split[0]+"/textures/rgb/"
+        else:
+            addon_name = __name__.split('.')[0]
+            prefs = bpy.context.preferences.addons[addon_name].preferences
+            if prefs.default_image_path != "":
+                return prefs.default_image_path
     return ""
 
 
@@ -59,10 +64,6 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
         description="File path used for exporting the SOD file",
         maxlen=1024,
         default="")
-    only_selected: BoolProperty(
-        name="Export only selected",
-        description="Exports only selected Objects",
-        default=False)
     preset: EnumProperty(
         name="Surfaces",
         description="You can select wether you want to export per object "
@@ -77,9 +78,6 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
         ])
 
     def execute(self, context):
-        objects = context.scene.objects
-        if self.only_selected:
-            objects = context.selected_objects
 
         Blender_SOD.Export_SOD(self.filepath)
 
@@ -97,18 +95,6 @@ def menu_func_sod_import(self, context):
 
 def menu_func_sod_export(self, context):
     self.layout.operator(Export_STA_SOD.bl_idname, text="ST:Armada (.sod)")
-
-
-def update_material_type(self, context):
-    obj = context.active_object
-    obj["material"] = self.material_type
-    return
-
-
-def update_face_cull(self, context):
-    obj = context.active_object
-    obj["cull_type"] = int(self.face_cull)
-    return
 
 
 def update_animated(self, context):
@@ -152,7 +138,6 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
         name="Material Type",
         description="Changes how the models material behave",
         default='default',
-        #update=update_material_type,
         items=[
             ('default', "Standard material",
              "Standard material", 0),
@@ -174,7 +159,6 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
         name="Face Culling",
         description="Changes how the models faces orient",
         default="1",
-        #update=update_face_cull,
         items=[
             ("1", "Front sided",
              "Backface culling", 0),
@@ -438,6 +422,7 @@ class STA_OP_LoadMeshTexture(bpy.types.Operator):
     filepath: StringProperty(subtype='FILE_PATH', options={'SKIP_SAVE'})
     filename_ext = ".tga"
     filter_glob: StringProperty(default="*.tga", options={'HIDDEN'})
+    directory: StringProperty()
 
     def execute(self, context):
         sanitized_path = self.filepath.replace("\\", "/")
@@ -454,6 +439,13 @@ class STA_OP_LoadMeshTexture(bpy.types.Operator):
         return {'FINISHED'}
     
     def invoke(self, context, event):
+        addon_name = __name__.split('.')[0]
+        prefs = context.preferences.addons[addon_name].preferences
+
+        texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
+        if texture_path != "":
+            self.directory = texture_path
+
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -468,9 +460,6 @@ class STA_PT_EntityPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.active_object
-
-        addon_name = __name__.split('.')[0]
-        prefs = context.preferences.addons[addon_name].preferences
 
         if obj is None:
             return
@@ -500,7 +489,7 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             return
 
         row.label(text = node_match[node_type])
-        if node_type == 0:
+        if node_type == 0 or node_type == 11:
             row.operator("sta.change_node_type", text = "Make Sprite").node_type = 3
             row.operator("sta.change_node_type", text = "Make Emitter").node_type = 12
         elif node_type == 3:
@@ -593,10 +582,6 @@ class STA_PT_MaterialExportPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = context.active_object
-
-        addon_name = __name__.split('.')[0]
-        prefs = context.preferences.addons[addon_name].preferences
 
         for node_group in bpy.data.node_groups:
             row = layout.row()
@@ -701,7 +686,7 @@ class STA_PT_HelperPanel(bpy.types.Panel):
             layout.operator("sta.create_rig")
 
         for node in STA_NODES[1:]:
-            if node == "Damage":
+            if node == "Damage" and node in context.scene.objects:
                 layout.label(text="Damage Nodes:")
                 continue
             node_name = node
