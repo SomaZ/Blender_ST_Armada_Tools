@@ -68,7 +68,7 @@ class Material_Node(Generic_Node_Group):
         node_add.name = "Term1"
         node_add.blend_type = "ADD"
         node_add.inputs[0].default_value = 1.0
-        node_add.location = (0, -300)
+        node_add.location = (26.8, -269.7)
         material_group.links.new(
             group_inputs.outputs["Ambient Color"], node_add.inputs["Color1"])
         material_group.links.new(
@@ -156,6 +156,19 @@ class Material_Node(Generic_Node_Group):
         gamma.inputs["Gamma"].default_value = 2.2
         gamma.location = (1129, -74.5)
 
+        math_002 = material_group.nodes.new("ShaderNodeMath")
+        math_002.name = "Math.002"
+        math_002.operation = 'GREATER_THAN'
+        #Value_001
+        math_002.inputs[1].default_value = 0.1
+
+        #node Term2.002
+        term2_002 = material_group.nodes.new("ShaderNodeMixRGB")
+        term2_002.name = "Term2.002"
+        term2_002.blend_type = 'MIX'
+        term2_002.use_alpha = False
+        term2_002.use_clamp = False
+
         #Set locations
         group_inputs.location = (-1227.2, -33.9)
         group_outputs.location = (1390, 40.5)
@@ -171,6 +184,8 @@ class Material_Node(Generic_Node_Group):
         vector_math_003.location = (-43.3, -236.7)
         math_001.location = (537.5, 158.3)
         term2_001.location = (929, -74.5)
+        math_002.location = (-204, -87)
+        term2_002.location = (240, -107)
 
         material_group.links.new(group_inputs.outputs[1], group_outputs.inputs[1])
         material_group.links.new(group_inputs.outputs[2], node_add.inputs[1])
@@ -186,7 +201,6 @@ class Material_Node(Generic_Node_Group):
         material_group.links.new(vector_math_003.outputs[1], node_add.inputs[0])
         material_group.links.new(geometry.outputs[4], vector_math_001.inputs[1])
         material_group.links.new(group_inputs.outputs[6], math_001.inputs[0])
-        material_group.links.new(node_add.outputs[0], node_mult.inputs[2])
         material_group.links.new(node_mult.outputs[0], term1_002.inputs[1])
         material_group.links.new(vector_math_002.outputs[0], vector_math.inputs[1])
         material_group.links.new(term1_002.outputs[0], term2_001.inputs[2])
@@ -196,7 +210,11 @@ class Material_Node(Generic_Node_Group):
         material_group.links.new(gamma.outputs[0], group_outputs.inputs[0])
         material_group.links.new(vector_math.outputs[1], math.inputs[0])
         material_group.links.new(term1_001.outputs[0], term1_002.inputs[2])
-        
+        material_group.links.new(group_inputs.outputs[6], math_002.inputs[0])
+        material_group.links.new(math_002.outputs[0], term2_002.inputs[0])
+        material_group.links.new(group_inputs.outputs[3], term2_002.inputs[1])
+        material_group.links.new(node_add.outputs[0], term2_002.inputs[2])
+        material_group.links.new(term2_002.outputs[0], node_mult.inputs[2])
         export_node = material_group.nodes.new(type="ShaderNodeValue")
         export_node.name = "ST:A_Export"
         export_node.outputs[0].default_value = 0
@@ -205,7 +223,7 @@ class Material_Node(Generic_Node_Group):
         set_default_input(material_group, "Texture Color", [1.0, 1.0, 1.0, 1.0])
         set_default_input(material_group, "Texture Alpha", 1.0)
         set_default_input(material_group, "Diffuse Color", [1.0, 1.0, 1.0, 1.0])
-        set_default_input(material_group, "Ambient Color", [0.5, 0.5, 0.5, 1.0])
+        set_default_input(material_group, "Ambient Color", [0.2, 0.2, 0.2, 1.0])
         set_default_input(material_group, "Specular Color", [0.45, 0.45, 0.45, 1.0])
         set_default_input(material_group, "Specular Power", 50.0)
         
