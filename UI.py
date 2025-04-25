@@ -204,6 +204,16 @@ class STA_OP_UpdateMaterial(bpy.types.Operator):
             print("No ST:A Material found")
             return {'CANCELLED'}
         
+        if obj.sta_dynamic_props.texture_name == "":
+            img_node = None
+            for node in mat.node_tree.nodes:
+                if node.type != "TEX_IMAGE":
+                    continue
+                img_node = node
+                break
+            if img_node:
+                obj.sta_dynamic_props.texture_name = img_node.image.name.split(".")[0]
+        
         material_name = self.name
         new_mat_name = "{}.{}.{}.{}".format(
             material_name,
@@ -383,6 +393,15 @@ def update_object_materials(obj, context):
     for mat in obj.data.materials:
         materials.add(mat)
     for mat in materials:
+        if obj.sta_dynamic_props.texture_name == "":
+            img_node = None
+            for node in mat.node_tree.nodes:
+                if node.type != "TEX_IMAGE":
+                    continue
+                img_node = node
+                break
+            if img_node:
+                obj.sta_dynamic_props.texture_name = img_node.image.name.split(".")[0]
         new_mat_name = "{}.{}.{}.{}".format(
             mat.name.split(".")[0],
             obj.sta_dynamic_props.texture_name,
