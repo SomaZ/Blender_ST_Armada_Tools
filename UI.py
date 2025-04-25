@@ -156,15 +156,15 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
         items=[
             ('default', "Standard material",
              "Standard material", 0),
-            ('additive', "Use additive blending",
+            ('additive', "Additive blending",
              "Use additive blending", 1),
             ('translucent', "Semi transparent",
              "Semi transparent", 2),
             ('alphathreshold', "Use alpha channel 'cut outs'",
              "alpha channels will have hard edged 'threshold' but"
               " objects will be drawn quickly", 3),
-            ('alpha ', "Use entire alpha channel",
-             "Object will require sorting, so will have performance implications", 4),
+            ('alpha', "Skip alpha",
+             "Skip all alpha testing and blending", 4),
             ('wireframe', "Wireframe",
              "Use wireframe graphics", 5),
             ('wormhole', "Wormhole",
@@ -184,7 +184,7 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
     texture_name: StringProperty(
         name="Mesh Texture",
         description="Changes the models texture",
-        default="default"
+        default=""
     )
     animated: BoolProperty(
         name="Animated Node",
@@ -219,7 +219,7 @@ class STA_OP_UpdateMaterial(bpy.types.Operator):
             print("No ST:A Material found")
             return {'CANCELLED'}
         
-        material_name = mat.node_tree.nodes["ST:A Material"].node_tree.name
+        material_name = self.name
         new_mat_name = "{}.{}.{}.{}".format(
             material_name,
             obj.sta_dynamic_props.texture_name,
@@ -227,16 +227,28 @@ class STA_OP_UpdateMaterial(bpy.types.Operator):
             obj.sta_dynamic_props.material_type
         )
         if new_mat_name in bpy.data.materials:
-            for slot in obj.material_slots:
-                if mat.name == slot.material.name:
-                    slot.material = bpy.data.materials[new_mat_name]
-            return {'FINISHED'}
+            re_mat = bpy.data.materials[new_mat_name]
+            if re_mat.use_nodes and re_mat.node_tree.nodes.get("ST:A Material"):
+                for slot in obj.material_slots:
+                    if mat.name == slot.material.name:
+                        slot.material = bpy.data.materials[new_mat_name]
+                return {'FINISHED'}
+        
+        #create new mat when texture name or face_cull or type is different
+        material_data = mat.name.split(".")
+        if len(material_data) >= 4:
+            _, current_texture, current_cull, current_type = material_data[:4]
+            if (current_texture != obj.sta_dynamic_props.texture_name or
+                 current_cull != obj.sta_dynamic_props.face_cull or
+                 current_type != obj.sta_dynamic_props.material_type):
+                new_mat = bpy.data.materials.new(new_mat_name)
+                new_mat.use_nodes = True
+                for slot in obj.material_slots:
+                    if mat.name == slot.material.name:
+                        slot.material = bpy.data.materials[new_mat_name]
+                mat = new_mat
 
-        new_mat = bpy.data.materials.new(new_mat_name)
-        new_mat.use_nodes = True
-        for slot in obj.material_slots:
-            if mat.name == slot.material.name:
-                slot.material = new_mat
+        mat.name = new_mat_name
         texture_path = ""
         if context.scene.sta_sod_file_path != "":
             texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
@@ -248,7 +260,7 @@ class STA_OP_UpdateMaterial(bpy.types.Operator):
             img_node = node
             break
     
-        mat_node = mat.node_tree.nodes["ST:A Material"]
+        mat_node = mat.node_tree.nodes.get("ST:A Material")
         Blender_Materials.finish_mat(mat, texture_path, [], img_node, mat_node)
 
         return {'FINISHED'}
@@ -265,8 +277,7 @@ class STA_OP_Make_Material(bpy.types.Operator):
         mat = context.material
 
         if not mat.use_nodes:
-            print("No texture in material nor object. Can't create material")
-            return {'CANCELLED'}
+            mat.use_nodes = True
         img_node = None
         for node in mat.node_tree.nodes:
             if node.type != "TEX_IMAGE":
@@ -283,13 +294,21 @@ class STA_OP_Make_Material(bpy.types.Operator):
             obj.sta_dynamic_props.face_cull,
             obj.sta_dynamic_props.material_type
         )
+        make_new_material = True
         if new_mat_name in bpy.data.materials:
-            for slot in obj.material_slots:
-                if mat.name == slot.material.name:
-                    slot.material = bpy.data.materials[new_mat_name]
-            return {'FINISHED'}
+            re_mat = bpy.data.materials[new_mat_name]
+            if re_mat.use_nodes and re_mat.node_tree.nodes.get("ST:A Material"):
+                for slot in obj.material_slots:
+                    if mat.name == slot.material.name:
+                        slot.material = bpy.data.materials[new_mat_name]
+                return {'FINISHED'}
+            make_new_material = False
         
-        new_mat = bpy.data.materials.new(new_mat_name)
+        if make_new_material:
+            new_mat = bpy.data.materials.new(new_mat_name)
+        else:
+            new_mat = mat
+            new_mat.name = new_mat_name
         new_mat.use_nodes = True
         for slot in obj.material_slots:
             if mat.name == slot.material.name:
@@ -298,10 +317,10 @@ class STA_OP_Make_Material(bpy.types.Operator):
         if context.scene.sta_sod_file_path != "":
             texture_path = guess_texture_path(context.scene.sta_sod_file_path.lower())
 
-        Blender_Materials.finish_mat(mat, texture_path, [])
-        if "ST:A Material" not in mat.node_tree.nodes:
+        Blender_Materials.finish_mat(new_mat, texture_path, [])
+        if "ST:A Material" not in new_mat.node_tree.nodes:
             return {'FINISHED'}
-        mat_nt = mat.node_tree.nodes["ST:A Material"].node_tree
+        mat_nt = new_mat.node_tree.nodes["ST:A Material"].node_tree
         if "ST:A_Export" in mat_nt.nodes:
             mat_nt.nodes["ST:A_Export"].outputs[0].default_value = 1.0
 
@@ -334,16 +353,28 @@ class STA_PT_Materialpanel(bpy.types.Panel):
         row.operator("sta.update_material", text="", icon="CHECKMARK").name = material_node.node_tree.name
         if material_node is not None:
             col = layout.column()
-            ambient = material_node.node_tree.interface.items_tree["Ambient Color"]
-            col.prop(ambient, "default_value", text="Ambient Color")
-            diffuse = material_node.node_tree.interface.items_tree["Diffuse Color"]
-            col.prop(diffuse, "default_value", text="Diffuse Color")
-            specular = material_node.node_tree.interface.items_tree["Specular Color"]
-            col.prop(specular, "default_value", text="Specular Color")
-            specular = material_node.node_tree.interface.items_tree["Specular Power"]
-            col.prop(specular, "default_value", text="Specular Power")
-            model = material_node.node_tree.interface.items_tree["Lighting Model"]
-            col.prop(model, "default_value", text="Lighting Model")
+            if bpy.app.version >= (4, 0, 0):
+                ambient = material_node.node_tree.interface.items_tree["Ambient Color"]
+                col.prop(ambient, "default_value", text="Ambient Color")
+                diffuse = material_node.node_tree.interface.items_tree["Diffuse Color"]
+                col.prop(diffuse, "default_value", text="Diffuse Color")
+                specular = material_node.node_tree.interface.items_tree["Specular Color"]
+                col.prop(specular, "default_value", text="Specular Color")
+                specular = material_node.node_tree.interface.items_tree["Specular Power"]
+                col.prop(specular, "default_value", text="Specular Power")
+                model = material_node.node_tree.interface.items_tree["Lighting Model"]
+                col.prop(model, "default_value", text="Lighting Model")
+            else:
+                ambient = material_node.node_tree.inputs["Ambient Color"]
+                col.prop(ambient, "default_value", text="Ambient Color")
+                diffuse = material_node.node_tree.inputs["Diffuse Color"]
+                col.prop(diffuse, "default_value", text="Diffuse Color")
+                specular = material_node.node_tree.inputs["Specular Color"]
+                col.prop(specular, "default_value", text="Specular Color")
+                specular = material_node.node_tree.inputs["Specular Power"]
+                col.prop(specular, "default_value", text="Specular Power")
+                model = material_node.node_tree.inputs["Lighting Model"]
+                col.prop(model, "default_value", text="Lighting Model")
 
 
 class STA_OP_ChangeNodeType(bpy.types.Operator):
@@ -393,7 +424,6 @@ class STA_OP_UpdateObjectMaterials(bpy.types.Operator):
     bl_idname = "sta.udpate_all_object_materials"
     bl_label = "Update materials"
     bl_options = {"UNDO", "INTERNAL", "REGISTER"}
-    node_type: IntProperty()
 
     def execute(self, context):
         update_object_materials(context.object, context)

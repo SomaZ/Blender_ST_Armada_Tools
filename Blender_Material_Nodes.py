@@ -7,11 +7,19 @@ def create_node_output(node_group, type, name):
     else:
         node_group.outputs.new(type, name)
 
-def create_node_input(node_group, type, name):
+def create_node_input(node_group, type, name, min_v = None, max_v = None):
     if bpy.app.version >= (4, 0, 0):
-        node_group.interface.new_socket(name=name, in_out='INPUT', socket_type=type)
+        socket = node_group.interface.new_socket(name=name, in_out='INPUT', socket_type=type)
+        if min_v is not None:
+            socket.min_value = min_v
+        if max_v is not None:
+            socket.max_value = max_v
     else:
-        node_group.inputs.new(type, name)
+        input = node_group.inputs.new(type, name)
+        if min_v:
+            input.min_value = min_v
+        if max_v:
+            input.max_value = max_v
 
 def set_default_input(node_group, name, value):
     if bpy.app.version >= (4, 0, 0):
@@ -57,7 +65,7 @@ class Material_Node(Generic_Node_Group):
         create_node_input(material_group, 'NodeSocketColor', 'Diffuse Color')
         create_node_input(material_group, 'NodeSocketColor', 'Specular Color')
         create_node_input(material_group, 'NodeSocketFloat', 'Specular Power')
-        create_node_input(material_group, 'NodeSocketInt', 'Lighting Model')
+        create_node_input(material_group, 'NodeSocketInt', 'Lighting Model', 0, 2)
 
         group_outputs = material_group.nodes.new('NodeGroupOutput')
         group_outputs.location = (1300, 0)

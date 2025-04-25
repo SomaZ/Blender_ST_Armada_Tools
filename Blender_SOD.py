@@ -101,7 +101,7 @@ def Import_SOD(sod):
 
             mesh_objects.append(node_object)
             
-            node_object.sta_dynamic_props.material_type = node.mesh.material if node.mesh.material else "default"
+            node_object.sta_dynamic_props.material_type = node.mesh.material.strip() if node.mesh.material else "default"
             node_object.sta_dynamic_props.texture_name = node.mesh.texture if node.mesh.texture else ""
             node_object.sta_dynamic_props.face_cull = str(node.mesh.cull_type)
             node_object.sta_dynamic_props.texture_animated = False
@@ -188,6 +188,23 @@ def Get_material_name(mat):
     material_node = mat.node_tree.nodes["ST:A Material"]
     return material_node.node_tree.name
 
+def Get_texture_name(obj):
+    texture_name = obj.sta_dynamic_props.texture_name
+    if texture_name == "":
+        img_node = None
+        for mat in obj.data.materials:
+            if not mat.use_nodes:
+                continue
+            for node in mat.node_tree.nodes:
+                if node.type != "TEX_IMAGE":
+                    continue
+                img_node = node
+                break
+            if img_node:
+                texture_name = img_node.image.name.split(".")[0]
+                break
+    return texture_name
+
 def Make_meshes_from_objects(objects):
     meshes = []
     depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -272,7 +289,7 @@ def Make_meshes_from_objects(objects):
         meshes.append(
             Mesh(
                 material = obj.sta_dynamic_props.material_type,
-                texture = obj.sta_dynamic_props.texture_name,
+                texture = Get_texture_name(obj),
                 cull_type = obj.sta_dynamic_props.face_cull,
                 verts = current_positions,
                 tcs = current_texture_coordinates,
@@ -430,15 +447,25 @@ def Export_SOD(file_path, version = 1.8):
         if mat_node.node_tree.nodes["ST:A_Export"].outputs[0].default_value != 1.0:
             continue
 
-        new_sod.materials[mat_node.node_tree.name] = Material(
-            mat_node.node_tree.name,
-            tuple(mat_node.node_tree.interface.items_tree["Ambient Color"].default_value[:3]),
-            tuple(mat_node.node_tree.interface.items_tree["Diffuse Color"].default_value[:3]),
-            tuple(mat_node.node_tree.interface.items_tree["Specular Color"].default_value[:3]),
-            mat_node.node_tree.interface.items_tree["Specular Power"].default_value,
-            mat_node.node_tree.interface.items_tree["Lighting Model"].default_value
-        )
-    
+        if bpy.app.version >= (4, 0, 0):
+            new_sod.materials[mat_node.node_tree.name] = Material(
+                mat_node.node_tree.name,
+                tuple(mat_node.node_tree.interface.items_tree["Ambient Color"].default_value[:3]),
+                tuple(mat_node.node_tree.interface.items_tree["Diffuse Color"].default_value[:3]),
+                tuple(mat_node.node_tree.interface.items_tree["Specular Color"].default_value[:3]),
+                mat_node.node_tree.interface.items_tree["Specular Power"].default_value,
+                mat_node.node_tree.interface.items_tree["Lighting Model"].default_value
+            )
+        else:
+            new_sod.materials[mat_node.node_tree.name] = Material(
+                mat_node.node_tree.name,
+                tuple(mat_node.node_tree.inputs["Ambient Color"].default_value[:3]),
+                tuple(mat_node.node_tree.inputs["Diffuse Color"].default_value[:3]),
+                tuple(mat_node.node_tree.inputs["Specular Color"].default_value[:3]),
+                mat_node.node_tree.inputs["Specular Power"].default_value,
+                mat_node.node_tree.inputs["Lighting Model"].default_value
+            )
+
     if "root" not in bpy.context.scene.objects:
         print("No root object found. Writing materials only")
         new_sod.to_file(file_path)

@@ -12,7 +12,10 @@ def set_material_drivers(mat_node):
         var.type = 'SINGLE_PROP'
         var.targets[0].id_type = "NODETREE"
         var.targets[0].id = material_group
-        var.targets[0].data_path = 'interface.items_tree["{}"].default_value'.format(v)
+        if bpy.app.version >= (4, 0, 0):
+            var.targets[0].data_path = 'interface.items_tree["{}"].default_value'.format(v)
+        else:
+            var.targets[0].data_path = 'inputs["{}"].default_value'.format(v)
         driver.driver.expression = var.name
 
     values = ("Ambient Color", "Diffuse Color", "Specular Color")
@@ -24,18 +27,27 @@ def set_material_drivers(mat_node):
             var.type = 'SINGLE_PROP'
             var.targets[0].id_type = "NODETREE"
             var.targets[0].id = material_group
-            var.targets[0].data_path = 'interface.items_tree["{}"].default_value[{}]'.format(v, i)
+            if bpy.app.version >= (4, 0, 0):
+                var.targets[0].data_path = 'interface.items_tree["{}"].default_value[{}]'.format(v, i)
+            else:
+                var.targets[0].data_path = 'inputs["{}"].default_value[{}]'.format(v, i)
             driver[i].driver.expression = var.name
 
 def set_material_custom_properties(mat_node, sod_mat):
     material_group = mat_node.node_tree
-
-    material_group.interface.items_tree["Ambient Color"].default_value =  [*(sod_mat.ambient), 1.0]
-    material_group.interface.items_tree["Diffuse Color"].default_value =  [*(sod_mat.diffuse), 1.0]
-    material_group.interface.items_tree["Specular Color"].default_value =  [*(sod_mat.specular), 1.0]
-    material_group.interface.items_tree["Specular Power"].default_value =  sod_mat.specular_power
-    material_group.interface.items_tree["Lighting Model"].default_value =  sod_mat.lighting_model
-
+    if bpy.app.version >= (4, 0, 0):
+        material_group.interface.items_tree["Ambient Color"].default_value =  [*(sod_mat.ambient), 1.0]
+        material_group.interface.items_tree["Diffuse Color"].default_value =  [*(sod_mat.diffuse), 1.0]
+        material_group.interface.items_tree["Specular Color"].default_value =  [*(sod_mat.specular), 1.0]
+        material_group.interface.items_tree["Specular Power"].default_value =  sod_mat.specular_power
+        material_group.interface.items_tree["Lighting Model"].default_value =  sod_mat.lighting_model
+    else:
+        material_group.inputs["Ambient Color"].default_value =  [*(sod_mat.ambient), 1.0]
+        material_group.inputs["Diffuse Color"].default_value =  [*(sod_mat.diffuse), 1.0]
+        material_group.inputs["Specular Color"].default_value =  [*(sod_mat.specular), 1.0]
+        material_group.inputs["Specular Power"].default_value =  sod_mat.specular_power
+        material_group.inputs["Lighting Model"].default_value =  sod_mat.lighting_model
+        
     if "ST:A_Export" in material_group.nodes:
         material_group.nodes["ST:A_Export"].outputs[0].default_value = 1.0
 
@@ -50,8 +62,11 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         return
     
     out_node.inputs["Base Color"].default_value = [0.0, 0.0, 0.0, 1.0]
-    out_node.inputs["IOR"].default_value = 1.0
-    out_node.inputs["Emission Strength"].default_value = 1.0
+    if bpy.app.version >= (4, 0, 0):
+        out_node.inputs["IOR"].default_value = 1.0
+        out_node.inputs["Emission Strength"].default_value = 1.0
+    else:
+        out_node.inputs["Specular"].default_value = 0.0
 
     if img_node is None:
         img_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -63,6 +78,8 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             material, image_name, cull, type = props
         elif len(props) > 4:
             material, image_name, cull, type = props[:4]
+
+        type = type.strip()
 
         image = bpy.data.images.get(image_name + ".tga")
         if image is None:
@@ -97,8 +114,7 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             break
 
     if type == "alpha":
-        mat.node_tree.links.new(out_node.inputs["Alpha"], img_node.outputs["Alpha"])
-        mat.blend_method = "HASHED"
+        mat.blend_method = "OPAQUE"
     elif type == "additive":
         transparent_node = mat.node_tree.nodes.new(type="ShaderNodeBsdfTransparent")
         transparent_node.location = out_node.location + Vector([ 0, 200])
@@ -112,14 +128,15 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
             mat.node_tree.links.new(add_node.outputs[0], mat_out_node.inputs[0])
         mat.blend_method = "BLEND"
     elif type == "translucent": # Untested, need to find examples where this is even used
-        transparent_node = mat.node_tree.nodes.new(type="ShaderNodeBsdfTransparent")
-        transparent_node.location = out_node.location + Vector([ 0, 200])
-        mat.node_tree.links.new(transparent_node.inputs["Color"], img_node.outputs["Color"])
-        
-        if mat_out_node is not None:
-            mat.node_tree.links.new(transparent_node.outputs[0], mat_out_node.inputs[0])
+        out_node.inputs["Alpha"].default_value = 0.5
         mat.blend_method = "BLEND"
-    else: # if type == "alphathreshold" or thresholded:
+    elif type == "wireframe":
+        wire_node = mat.node_tree.nodes.new(type="ShaderNodeWireframe")
+        wire_node.location = out_node.location + Vector([ -400, 200])
+        wire_node.inputs["Size"].default_value = 0.1
+        mat.node_tree.links.new(out_node.inputs["Alpha"], wire_node.outputs[0])
+        mat.blend_method = "HASHED"
+    else:
         math_threshold = mat.node_tree.nodes.new(type="ShaderNodeMath")
         math_threshold.operation = "GREATER_THAN"
         math_threshold.inputs[1].default_value = 0.5
@@ -129,8 +146,11 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         if mat_out_node is not None:
             mat.node_tree.links.new(out_node.outputs[0], mat_out_node.inputs[0])
         mat.blend_method = "HASHED"
-        
-    mat.node_tree.links.new(out_node.inputs["Emission Color"], img_node.outputs["Color"])
+    
+    if bpy.app.version >= (4, 0, 0):
+        mat.node_tree.links.new(out_node.inputs["Emission Color"], img_node.outputs["Color"])
+    else:
+        mat.node_tree.links.new(out_node.inputs["Emission"], img_node.outputs["Color"])
 
 def finsh_object_materials(objects, texture_path, sod_materials):
     materials = set()
