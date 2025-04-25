@@ -501,17 +501,17 @@ def Export_SOD(file_path, version = 1.8):
             mat34 = mat34_from_blender(world_mat, scale)
             matrices.append(mat34)
 
-        new_sod.channels[obj.name] = Animation_channel(
-            name = obj.name,
+        new_sod.channels[obj.name.replace(".", "_")] = Animation_channel(
+            name = obj.name.replace(".", "_"),
             length = obj["length"],
             matrices=matrices
         )
 
     # add references
     for obj in texture_animated_objects:
-        new_sod.references[obj.name] = Animation_reference(
+        new_sod.references[obj.name.replace(".", "_")] = Animation_reference(
             type = obj["ref_type"],
-            node = obj.name,
+            node = obj.name.replace(".", "_"),
             anim = obj["ref_animation"],
             offset= obj["ref_offset"]
         )
