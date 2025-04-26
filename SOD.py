@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import struct
 
-SUPPORTED_VERSIONS = (1.6, 1.7, 1.8)
+SUPPORTED_VERSIONS = (1.4, 1.5, 1.6, 1.7, 1.8) #, 1.9, 1.91, 1.92, 1.93)
 
 @dataclass
 class Identifier:
@@ -258,13 +258,15 @@ class SOD:
         references = {}
         with open(file_path, "rb") as file:
             ident = file.read(10).decode()
-            if ident != "Storm3D_SW":
+            if ident != "Storm3D_SW" and ident != "StarTrekDB":
                 print("File ident was:", ident)
-                raise Exception("Not a valid sod file")
+                raise Exception("Not a valid sod file. Ident was {}. Expected 'Storm3D_SW'".format(ident))
 
             version = file.read(4)
+            self.version = round(struct.unpack("<f", version)[0], 2)
+            print("SOD Version:", self.version)
 
-            if version == struct.pack("<f", 1.6):
+            if self.version in (1.4, 1.5, 1.6):
                 whatever = struct.unpack("<H", file.read(2))[0]
                 for i in range(whatever):
                     len = struct.unpack("<H", file.read(2))[0]
@@ -272,13 +274,10 @@ class SOD:
                     len = struct.unpack("<H", file.read(2))[0]
                     text = struct.unpack("<{}s".format(len), file.read(len))[0].decode()
                     file.read(7)
-            elif version != struct.pack("<f", 1.8) and version != struct.pack("<f", 1.7):
-                print("Not a supported sod file")
-                return
-            
-            self.version = round(struct.unpack("<f", version)[0], 2)
-            version = self.version
-            print("SOD Version:", version)
+                    
+            elif self.version not in SUPPORTED_VERSIONS:
+                print("File version was:", self.version)
+                raise Exception("Not a supported sod file. Version was {}".format(self.version))
 
             num_mats = struct.unpack("<H", file.read(2))[0]
             print("Materials:", num_mats)
@@ -289,7 +288,7 @@ class SOD:
             num_nodes = struct.unpack("<H", file.read(2))[0]
             print("Nodes:", num_nodes)
             for i in range(num_nodes):
-                node = Node.from_file(file, version)
+                node = Node.from_file(file, self.version)
                 nodes[node.name] = node
 
             num_animation_channels = struct.unpack("<H", file.read(2))[0]
@@ -298,10 +297,17 @@ class SOD:
                 channel = Animation_channel.from_file(file)
                 channels[channel.name] = channel
 
+            if self.version in (1.4, 1.5):
+                self.nodes = nodes
+                self.materials = materials
+                self.channels = channels
+                self.references = {}
+                return self
+
             num_animation_references = struct.unpack("<H", file.read(2))[0]
             print("Texture Animations", num_animation_references)
             for i in range(num_animation_references):
-                reference = Animation_reference.from_file(file, version)
+                reference = Animation_reference.from_file(file, self.version)
                 references[reference.node] = reference
 
         self.nodes = nodes
@@ -317,7 +323,10 @@ class SOD:
                 "No valid sod version for writing the file. Version was {}".format(self.version))
         
         array = bytearray()
-        array += "Storm3D_SW".encode(encoding="ascii")
+        if self.version in (1.4, 1.5):
+            array += "StarTrekDB".encode(encoding="ascii")
+        else:
+            array += "Storm3D_SW".encode(encoding="ascii")
         array += struct.pack("<f", self.version)
         if self.version == 1.6:
             array += struct.pack("<H", 0)
@@ -330,9 +339,11 @@ class SOD:
         array += struct.pack("<H", len(self.channels))
         for channel in self.channels.values():
             array += channel.to_bytearray()
-        array += struct.pack("<H", len(self.references))
-        for ref in self.references.values():
-            array += ref.to_bytearray(self.version)
+
+        if self.version not in (1.4, 1.5):
+            array += struct.pack("<H", len(self.references))
+            for ref in self.references.values():
+                array += ref.to_bytearray(self.version)
 
         with open(file_path, "wb") as file:
             file.write(array)
