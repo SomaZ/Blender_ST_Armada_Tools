@@ -106,6 +106,14 @@ def Import_SOD(sod):
             node_object.sta_dynamic_props.texture_name = node.mesh.texture if node.mesh.texture else ""
             node_object.sta_dynamic_props.face_cull = str(node.mesh.cull_type)
             node_object.sta_dynamic_props.texture_animated = False
+
+            node_object.sta_II_dynamic_props.unknownmap_name = (
+                node.mesh.unknown_texture if node.mesh.unknown_texture else "")
+            node_object.sta_II_dynamic_props.bumpmap_texture_name = (
+                node.mesh.bumpmap if node.mesh.bumpmap else "")
+            node_object.sta_II_dynamic_props.assimilation_texture_name = (
+                node.mesh.assimilation_texture if node.mesh.assimilation_texture else "")
+            
         elif node.type == 12:
             bpy.ops.object.empty_add(type="ARROWS")
             tag_obj = bpy.context.object
@@ -369,12 +377,15 @@ def Make_meshes_from_objects(objects, version):
                 cull_type = int(obj.sta_dynamic_props.face_cull),
                 verts = current_positions,
                 tcs = current_texture_coordinates,
-                groups = current_groups.values()
+                groups = current_groups.values(),
+                unknown_texture=obj.sta_II_dynamic_props.unknownmap_name,
+                bumpmap=obj.sta_II_dynamic_props.bumpmap_texture_name,
+                assimilation_texture=obj.sta_II_dynamic_props.assimilation_texture_name
             ))
 
     return meshes
 
-def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects, version):
+def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects, root_name, version):
     world_mat = obj.matrix_world
     obj_name = obj.name.replace(".", "_")
     parent_name = ""
@@ -383,7 +394,7 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects, ve
         parent_name = obj.parent.name.replace(".", "_")
         _, _, scale = obj.parent.matrix_world.decompose()
         world_mat = obj.parent.matrix_world.inverted() @ world_mat
-        if parent_name == "root":
+        if parent_name == root_name:
             world_mat = inverse_rot_mat @ world_mat
     else:
         world_mat = Matrix.Identity(4)
@@ -438,7 +449,7 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects, ve
     for child in obj.children:
         if child in processed_children:
             continue
-        Add_new_sod_nodes(child, nodes, texture_animated_objects, animated_objects, version)
+        Add_new_sod_nodes(child, nodes, texture_animated_objects, animated_objects, root_name, version)
 
 
 def Export_SOD(file_path, version = 1.8):
@@ -477,18 +488,23 @@ def Export_SOD(file_path, version = 1.8):
                 mat_node.node_tree.inputs["Lighting Model"].default_value
             )
 
-    if "root" not in bpy.context.scene.objects:
-        print("No root object found. Writing materials only")
-        new_sod.to_file(file_path)
-        return
+    root_name = "root"
+    if root_name not in bpy.context.scene.objects:
+        root_name = "Scene Root"
+        if root_name not in bpy.context.scene.objects:
+            new_sod.to_file(file_path)
+            raise Exception(
+                "No root object found. Exported materials only. Valid root "
+                "names are 'root' or 'Scene Root'")
     
     texture_animated_objects = []
     animated_objects = []
     Add_new_sod_nodes(
-        bpy.context.scene.objects["root"],
+        bpy.context.scene.objects[root_name],
         new_sod.nodes,
         texture_animated_objects,
         animated_objects,
+        root_name,
         version)
 
     # add animations
@@ -504,7 +520,7 @@ def Export_SOD(file_path, version = 1.8):
             if obj.parent:
                 _, _, scale = obj.parent.matrix_world.decompose()
                 world_mat = obj.parent.matrix_world.inverted() @ world_mat
-                if obj.parent.name == "root":
+                if obj.parent.name == root_name:
                     world_mat = inverse_rot_mat @ world_mat
             else:
                 world_mat = Matrix.Identity(4)

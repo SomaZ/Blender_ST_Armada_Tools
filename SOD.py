@@ -120,6 +120,7 @@ class Mesh:
     # Armada 2 specific fields
     bumpmap: str = ""
     assimilation_texture: str = ""
+    unknown_texture: str = ""
 
     @classmethod
     def from_file(cls, file, sod_version) -> Mesh:
@@ -139,12 +140,12 @@ class Mesh:
         self.bumpmap = None
 
         if (sod_version == 1.91):
-            unknown_bytes = file.read(2) # Also potentially an idendifier
+            unknown_bytes = file.read(2) # Also potentially an identifier
         elif (sod_version == 1.92):
             self.assimilation_texture = Identifier.from_file(file).name
             unknown_texinfo = struct.unpack("<H", file.read(2))[0] # always 0
         elif (sod_version >= 1.93):
-            unknown_identifier = Identifier.from_file(file).name # always None
+            self.unknown_texture = Identifier.from_file(file).name # always None
             unknown_info = struct.unpack("<H", file.read(2))[0] # always 0
 
             if num_textures == 2:
@@ -189,11 +190,11 @@ class Mesh:
             array += Identifier(self.assimilation_texture).to_bytearray()
             array += struct.pack("<H", 0)
         elif (sod_version >= 1.93):
-            array += struct.pack("<H", 0)
+            array += Identifier(self.unknown_texture).to_bytearray()
             array += struct.pack("<H", 0)
             if num_textures == 2:
                 array += Identifier(self.bumpmap).to_bytearray()
-                array += struct.pack("<H", 0)
+                array += struct.pack("<HH", 512, 0)
             array += Identifier(self.assimilation_texture).to_bytearray()
             array += struct.pack("<H", 0)
 
@@ -342,7 +343,7 @@ class SOD:
 
             version = file.read(4)
             self.version = round(struct.unpack("<f", version)[0], 2)
-            print("File:", file_path.replace("\\", "/").rsplit("/", 1)[1])
+            print("File:", file_path.replace("\\", "/").rsplit("/", 1)[1], self.version)
 
             if self.version in (1.4, 1.5, 1.6):
                 whatever = struct.unpack("<H", file.read(2))[0]

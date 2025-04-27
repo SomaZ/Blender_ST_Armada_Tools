@@ -78,14 +78,14 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
 
-        Blender_SOD.Export_SOD(self.filepath, float(self.version))
-
-        status = (True, "Whatever")
-        if status[0]:
-            return {'FINISHED'}
-        else:
-            self.report({"ERROR"}, status[1])
+        try:
+            Blender_SOD.Export_SOD(self.filepath, float(self.version))
+        except Exception as e:
+            print(e)
+            self.report({"ERROR"}, str(e))
             return {'CANCELLED'}
+
+        return {'FINISHED'}
         
     def invoke(self, context, event): # type: ignore
         prefs = bpy.context.preferences.addons[__name__.split('.')[0]].preferences
@@ -187,6 +187,24 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
         description="Is the current texture animated?",
         default=False,
         update=update_texture_animation
+    )
+
+
+class STA_II_Dynamic_Node_Properties(PropertyGroup):
+    unknownmap_name: StringProperty(
+        name="Whatevermap (Armada 2)",
+        description="Changes the models whatever map",
+        default=""
+    )
+    bumpmap_texture_name: StringProperty(
+        name="Bumpmap (Armada 2)",
+        description="Changes the models bumpmap",
+        default=""
+    )
+    assimilation_texture_name: StringProperty(
+        name="Assimilation texture (Armada 2)",
+        description="Changes the models texture when it's assimilated",
+        default=""
     )
 
 
@@ -552,6 +570,10 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         row.operator("sta.udpate_all_object_materials")
         row.operator("sta.load_mesh_texture")
 
+        layout.prop(obj.sta_II_dynamic_props, "unknownmap_name")
+        layout.prop(obj.sta_II_dynamic_props, "bumpmap_texture_name")
+        layout.prop(obj.sta_II_dynamic_props, "assimilation_texture_name")
+
         layout.separator()
         layout.prop(obj.sta_dynamic_props, "texture_animated")
         if obj.sta_dynamic_props.texture_animated:
@@ -774,8 +796,9 @@ Warning: Currently opened file will be lost"""
                     f.write(":".join((a_categorys[cat], cat, split_cat[len(split_cat)-1])))
                     f.write("\n")
 
-        maps_files = os.listdir(self.filepath)
-        sod_list = [self.filepath + file_path 
+        sanitized_fp = self.filepath.replace("\\", "/").rsplit("/", 1)[0] + "/"
+        maps_files = os.listdir(sanitized_fp)
+        sod_list = [sanitized_fp + file_path 
                         for file_path in maps_files
                         if file_path.lower().endswith('.sod')]
         

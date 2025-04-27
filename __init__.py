@@ -20,7 +20,7 @@
 bl_info = {
     "name": "Star Trek Armada Tools",
     "author": "SomaZ",
-    "version": (0, 9, 9),
+    "version": (0, 9, 10),
     "description": "Importer/Exporter for Star Trek Armada sod files",
     "blender": (4, 1, 0),
     "location": "File > Import-Export",
@@ -100,6 +100,7 @@ class STAAddonPreferences(bpy.types.AddonPreferences):
 classes = (UI.STA_OP_FillAssetLibrary,
            STAAddonPreferences,
            UI.STA_Dynamic_Node_Properties,
+           UI.STA_II_Dynamic_Node_Properties,
            UI.Import_STA_SOD,
            UI.Export_STA_SOD,
            UI.STA_OP_UpdateMaterial,
@@ -125,6 +126,8 @@ def register():
     bpy.types.TOPBAR_MT_file_export.append(UI.menu_func_sod_export)
     bpy.types.Object.sta_dynamic_props = bpy.props.PointerProperty(
         type=UI.STA_Dynamic_Node_Properties)
+    bpy.types.Object.sta_II_dynamic_props = bpy.props.PointerProperty(
+        type=UI.STA_II_Dynamic_Node_Properties)
 
     bpy.types.Scene.sta_sod_file_path = bpy.props.StringProperty(
         name="ST: Armada SOD file path",
@@ -136,6 +139,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(UI.menu_func_sod_export)
     del bpy.types.Scene.sta_sod_file_path
     del bpy.types.Object.sta_dynamic_props
+    del bpy.types.Object.sta_II_dynamic_props
     for cls in classes:
         bpy.utils.unregister_class(cls)
     
