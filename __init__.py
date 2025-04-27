@@ -58,6 +58,17 @@ class STAAddonPreferences(bpy.types.AddonPreferences):
         maxlen=2048,
     )
 
+    default_export_game: bpy.props.EnumProperty(
+        name="Default export game",
+        description="Export for Armada or Armada II",
+        default='1.8',
+        items=[
+            ('1.8', "Star Trek: Armada",
+             "Default to SOD version 1.8", 0),
+            ('1.93', "Star Trek: Armada II",
+             "Default to SOD version 1.93", 1),
+        ])
+
     def assetslibs_list_cb(self, context):
         if bpy.app.version >= (3, 0, 0):
             libs = context.preferences.filepaths.asset_libraries
@@ -76,6 +87,8 @@ class STAAddonPreferences(bpy.types.AddonPreferences):
         layout = self.layout
         row = layout.row()
         row.prop(self, "default_image_path")
+        row = layout.row()
+        row.prop(self, "default_export_game")
         if bpy.app.version < (3, 0, 0):
             return
         layout.separator()

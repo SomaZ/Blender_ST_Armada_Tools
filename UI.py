@@ -86,6 +86,11 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
         else:
             self.report({"ERROR"}, status[1])
             return {'CANCELLED'}
+        
+    def invoke(self, context, event): # type: ignore
+        prefs = bpy.context.preferences.addons[__name__.split('.')[0]].preferences
+        self.version = prefs.default_export_game
+        return super().invoke(context, event)
 
 
 def menu_func_sod_import(self, context):
