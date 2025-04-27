@@ -144,7 +144,7 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
         wire_node.inputs["Size"].default_value = 0.1
         mat.node_tree.links.new(out_node.inputs["Alpha"], wire_node.outputs[0])
         mat.blend_method = "HASHED"
-    else:
+    elif type != "opaque":
         math_threshold = mat.node_tree.nodes.new(type="ShaderNodeMath")
         math_threshold.operation = "GREATER_THAN"
         math_threshold.inputs[1].default_value = 0.5

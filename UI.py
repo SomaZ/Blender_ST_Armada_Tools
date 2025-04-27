@@ -65,22 +65,20 @@ class Export_STA_SOD(bpy.types.Operator, ExportHelper):
         description="File path used for exporting the SOD file",
         maxlen=1024,
         default="")
-    preset: EnumProperty(
-        name="Surfaces",
-        description="You can select wether you want to export per object "
-        "or merged based on materials.",
-        default='MATERIALS',
+    version: EnumProperty(
+        name="Game",
+        description="Export for Armada or Armada II",
+        default='1.8',
         items=[
-            ('MATERIALS', "From Materials",
-             "Merges surfaces based on materials. Supports multi "
-             "material objects", 0),
-            ('OBJECTS', "From Objects",
-             "Simply export objects. There will be no optimization", 1),
+            ('1.8', "Star Trek: Armada",
+             "Exports SOD version 1.8", 0),
+            ('1.93', "Star Trek: Armada II",
+             "Exports SOD version 1.93", 1),
         ])
 
     def execute(self, context):
 
-        Blender_SOD.Export_SOD(self.filepath)
+        Blender_SOD.Export_SOD(self.filepath, float(self.version))
 
         status = (True, "Whatever")
         if status[0]:
@@ -155,6 +153,8 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
              "Use wireframe graphics", 5),
             ('wormhole', "Wormhole",
              "Used by wormholes", 6),
+            ('opaque', "Fully opaque",
+             "Skip all alpha", 7),
         ])
     face_cull: EnumProperty(
         name="Face Culling",
@@ -779,7 +779,8 @@ Warning: Currently opened file will be lost"""
         for sod_file in sod_list:
             try:
                 sod = SOD.from_file_path(sod_file)
-            except Exception:
+            except Exception as e:
+                print(e)
                 continue
             for node in sod.nodes.values():
                 if node.type == 12:

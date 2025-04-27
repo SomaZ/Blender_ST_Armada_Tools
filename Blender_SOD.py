@@ -1,6 +1,6 @@
 import bpy
 from mathutils import Matrix, Vector
-from numpy import array, dot, sqrt
+from numpy import array, dot, sqrt, average
 from .SOD import *
 
 rotation_mat = Matrix((
@@ -136,38 +136,45 @@ def Import_SOD(sod):
 
     # Parse animations
     bpy.context.scene.frame_end = 1
-    for channel in list(channels.values())[::-1]:
+    for channel_list in list(channels.values())[::-1]:
+        for channel in channel_list:
+            if not len(channel.matrices) and not len(channel.scales):
+                continue
+            
+            node_object = bpy.data.objects.get(channel.name)
+            if not node_object:
+                print("Could not find correct animation object node for channel", channel.name)
+                continue
+            
+            parent_object = node_object.parent
+            if not parent_object:
+                parent_matrix = Matrix.Identity(4)
+            else:
+                parent_matrix = parent_object.matrix_world
+                if parent_object.name == root_node_name:
+                    parent_matrix = rotation_mat @ parent_matrix
+            
+            node_object.sta_dynamic_props.animated = True
+            node_object["start_frame"] = 1
+            node_object["end_frame"] = len(channel.matrices)
+            node_object["length"] = channel.length
+            
+            if len(channel.scales):
+                node_object.keyframe_insert('scale', frame=0, group='Sca')
+            else:
+                node_object.keyframe_insert('location', frame=0, group='LocRot')
+                node_object.keyframe_insert('rotation_euler', frame=0, group='LocRot')
+            
+            for i in range(len(channel.matrices)):
+                node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
+                node_object.keyframe_insert('location', frame=i+1, group='LocRot')
+                node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
 
-        if not len(channel.matrices):
-            continue
-        
-        node_object = bpy.data.objects.get(channel.name)
-        if not node_object:
-            print("Could not find correct animation object node for channel", channel.name)
-            continue
-        
-        parent_object = node_object.parent
-        if not parent_object:
-            parent_matrix = Matrix.Identity(4)
-        else:
-            parent_matrix = parent_object.matrix_world
-            if parent_object.name == root_node_name:
-                parent_matrix = rotation_mat @ parent_matrix
-        
-        node_object.sta_dynamic_props.animated = True
-        node_object["start_frame"] = 1
-        node_object["end_frame"] = len(channel.matrices)
-        node_object["length"] = channel.length
-        
-        node_object.keyframe_insert('location', frame=0, group='LocRot')
-        node_object.keyframe_insert('rotation_euler', frame=0, group='LocRot')
-        
-        for i in range(len(channel.matrices)):
-            node_object.matrix_world = parent_matrix @ mat34_to_blender(channel.matrices[i])
-            node_object.keyframe_insert('location', frame=i+1, group='LocRot')
-            node_object.keyframe_insert('rotation_euler', frame=i+1, group='LocRot')
+            for i in range(len(channel.scales)):
+                node_object.scale = Vector((channel.scales[i], channel.scales[i], channel.scales[i]))
+                node_object.keyframe_insert('scale', frame=i+1, group='Sca')
 
-        bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, len(channel.matrices))
+            bpy.context.scene.frame_end = max(bpy.context.scene.frame_end, len(channel.matrices))
         
     # Parse texture animation info
     for ref in references.values():
@@ -206,7 +213,7 @@ def Get_texture_name(obj):
                 break
     return texture_name
 
-def Make_meshes_from_objects(objects):
+def Make_meshes_from_objects(objects, version):
     meshes = []
     depsgraph = bpy.context.evaluated_depsgraph_get()
     current_positions = []
@@ -367,7 +374,7 @@ def Make_meshes_from_objects(objects):
 
     return meshes
 
-def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
+def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects, version):
     world_mat = obj.matrix_world
     obj_name = obj.name.replace(".", "_")
     parent_name = ""
@@ -407,7 +414,7 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
         if obj.sta_dynamic_props.texture_animated:
             texture_animated_objects.append(obj)
 
-        new_mesh = Make_meshes_from_objects([obj])[0]
+        new_mesh = Make_meshes_from_objects([obj], version)[0]
         nodes[obj_name] = Node(
             type = node_type,
             name = obj_name,
@@ -431,7 +438,7 @@ def Add_new_sod_nodes(obj, nodes, texture_animated_objects, animated_objects):
     for child in obj.children:
         if child in processed_children:
             continue
-        Add_new_sod_nodes(child, nodes, texture_animated_objects, animated_objects)
+        Add_new_sod_nodes(child, nodes, texture_animated_objects, animated_objects, version)
 
 
 def Export_SOD(file_path, version = 1.8):
@@ -481,11 +488,15 @@ def Export_SOD(file_path, version = 1.8):
         bpy.context.scene.objects["root"],
         new_sod.nodes,
         texture_animated_objects,
-        animated_objects)
+        animated_objects,
+        version)
 
     # add animations
     for obj in animated_objects[::-1]:
         matrices = []
+        scales = []
+        _, _, default_scale = obj.matrix_world.decompose()
+        avg_default_scale = average(default_scale)
         for i in range(int(obj["start_frame"]), int(obj["end_frame"]) + 1):
             bpy.context.scene.frame_set(i)
             world_mat = obj.matrix_world
@@ -501,11 +512,22 @@ def Export_SOD(file_path, version = 1.8):
             mat34 = mat34_from_blender(world_mat, scale)
             matrices.append(mat34)
 
-        new_sod.channels[obj.name.replace(".", "_")] = Animation_channel(
-            name = obj.name.replace(".", "_"),
+            if version == 1.93:
+                _, _, scale = obj.matrix_world.decompose()
+                scales.append(average(scale) / avg_default_scale)
+        
+        obj_name = obj.name.replace(".", "_")
+        new_sod.channels[obj_name] = [Animation_channel(
+            name = obj_name,
             length = obj["length"],
             matrices=matrices
-        )
+        )]
+        if version == 1.93:
+            new_sod.channels[obj_name].append(Animation_channel(
+                name = obj_name,
+                length = obj["length"],
+                scales=scales
+            ))
 
     # add references
     for obj in texture_animated_objects:
