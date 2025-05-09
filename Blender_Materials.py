@@ -2,6 +2,25 @@ import bpy
 from . import Blender_Material_Nodes
 from mathutils import Vector
 
+FORMATS = (".tga", ".dds")
+IMG_PATHS = ("rgb/", "index8/", "dds/", "", "compressed/")
+
+def load_image(name, texture_path):
+    img = None
+    for folder in IMG_PATHS:
+        path = texture_path + folder
+        for fmt in FORMATS:
+            img = bpy.data.images.get("{}{}".format(name, fmt))
+            if img:
+                return img
+            try:
+                img = bpy.data.images.load("{}{}{}".format(path, name, fmt))
+                if img:
+                    return img
+            except Exception:
+                continue
+    return None
+
 def set_material_drivers(mat_node):
     material_group = mat_node.node_tree
     values = ("Specular Power", "Lighting Model")
@@ -81,9 +100,7 @@ def finish_mat(mat, texture_path, sod_materials, img_node = None, mat_node = Non
 
         type = type.strip()
 
-        image = bpy.data.images.get(image_name + ".tga")
-        if image is None:
-            image = bpy.data.images.load(texture_path + image_name + ".tga")
+        image = load_image(image_name, texture_path)
         img_node.image = image
         img_node.location = out_node.location + Vector([ -1200, 0])
         img_node.image.alpha_mode = 'CHANNEL_PACKED'

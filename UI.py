@@ -12,11 +12,11 @@ def guess_texture_path(file_path):
     SPLIT_FOLDER = "/sod/"
     split = file_path.split(SPLIT_FOLDER)
     if len(split) > 1:
-        return split[0]+"/textures/rgb/"
+        return split[0]+"/textures/"
     else:
-        split = file_path.split("/textures/rgb/")
+        split = file_path.split("/textures/")
         if len(split) > 1:
-            return split[0]+"/textures/rgb/"
+            return split[0]+"/textures/"
         else:
             addon_name = __name__.split('.')[0]
             prefs = bpy.context.preferences.addons[addon_name].preferences
