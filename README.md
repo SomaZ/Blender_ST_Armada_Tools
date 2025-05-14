@@ -12,7 +12,7 @@ The current implementation only supports previewing Aramada I materials. Some of
 
 ## Supported Games:
 
-| Game | Patch edits |
+| Game | Support |
 | - | - |
 | Star Trek: Armada | :heavy_check_mark: |
 | Star Trek: Armada II | :heavy_check_mark: |
