@@ -107,10 +107,10 @@ def Import_SOD(sod):
             node_object.sta_dynamic_props.face_cull = str(node.mesh.cull_type)
             node_object.sta_dynamic_props.texture_animated = False
 
-            node_object.sta_II_dynamic_props.unknownmap_name = (
-                node.mesh.unknown_texture if node.mesh.unknown_texture else "")
+            node_object.sta_II_dynamic_props.self_illumination = node.mesh.illumination
             node_object.sta_II_dynamic_props.bumpmap_texture_name = (
                 node.mesh.bumpmap if node.mesh.bumpmap else "")
+            node_object.sta_II_dynamic_props.bumpmap_type = "512" if node.mesh.use_heightmap else "0"
             node_object.sta_II_dynamic_props.assimilation_texture_name = (
                 node.mesh.assimilation_texture if node.mesh.assimilation_texture else "")
             
@@ -378,8 +378,9 @@ def Make_meshes_from_objects(objects, version):
                 verts = current_positions,
                 tcs = current_texture_coordinates,
                 groups = current_groups.values(),
-                unknown_texture=obj.sta_II_dynamic_props.unknownmap_name,
+                illumination=obj.sta_II_dynamic_props.self_illumination,
                 bumpmap=obj.sta_II_dynamic_props.bumpmap_texture_name,
+                use_heightmap=obj.sta_II_dynamic_props.bumpmap_type == "512",
                 assimilation_texture=obj.sta_II_dynamic_props.assimilation_texture_name
             ))
 

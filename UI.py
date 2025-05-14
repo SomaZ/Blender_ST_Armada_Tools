@@ -191,16 +191,26 @@ class STA_Dynamic_Node_Properties(PropertyGroup):
 
 
 class STA_II_Dynamic_Node_Properties(PropertyGroup):
-    unknownmap_name: StringProperty(
-        name="Whatevermap (Armada 2)",
-        description="Changes the models whatever map",
-        default=""
+    self_illumination: BoolProperty(
+        name="Self illumination",
+        description="Texture alpha is used for self illumination",
+        default=False
     )
     bumpmap_texture_name: StringProperty(
         name="Bumpmap (Armada 2)",
         description="Changes the models bumpmap",
         default=""
     )
+    bumpmap_type: EnumProperty(
+        name="Bumpmap type",
+        description="Heightmap or Normalmap",
+        default="512",
+        items=[
+            ("512", "Heightmap",
+             "Heightmap", 0),
+            ("0", "Normalmap",
+             "Normalmap", 1),
+        ])
     assimilation_texture_name: StringProperty(
         name="Assimilation texture (Armada 2)",
         description="Changes the models texture when it's assimilated",
@@ -570,8 +580,9 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         row.operator("sta.udpate_all_object_materials")
         row.operator("sta.load_mesh_texture")
 
-        layout.prop(obj.sta_II_dynamic_props, "unknownmap_name")
+        layout.prop(obj.sta_II_dynamic_props, "self_illumination")
         layout.prop(obj.sta_II_dynamic_props, "bumpmap_texture_name")
+        layout.prop(obj.sta_II_dynamic_props, "bumpmap_type")
         layout.prop(obj.sta_II_dynamic_props, "assimilation_texture_name")
 
         layout.separator()

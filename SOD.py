@@ -118,9 +118,10 @@ class Mesh:
     cull_type: bytes = 0
 
     # Armada 2 specific fields
+    illumination: bool = False
     bumpmap: str = ""
+    use_heightmap: bool = True
     assimilation_texture: str = ""
-    unknown_texture: str = ""
 
     @classmethod
     def from_file(cls, file, sod_version) -> Mesh:
@@ -133,24 +134,27 @@ class Mesh:
 
         num_textures = 1
         if (sod_version >= 1.93):
-            unknown_info = struct.unpack("<I", file.read(4))[0] # 0, 4 or 6 (6 with bumpmap?)
+            mesh_flags = struct.unpack("<I", file.read(4))[0] # 0, 4 or 6
+            if mesh_flags & 4:
+                self.illumination = True
             num_textures = struct.unpack("<I", file.read(4))[0]
 
         self.texture = Identifier.from_file(file).name
         self.bumpmap = None
 
         if (sod_version == 1.91):
-            unknown_bytes = file.read(2) # Also potentially an identifier
+            unknown_texinfo = file.read(2)
         elif (sod_version == 1.92):
             self.assimilation_texture = Identifier.from_file(file).name
             unknown_texinfo = struct.unpack("<H", file.read(2))[0] # always 0
         elif (sod_version >= 1.93):
-            self.unknown_texture = Identifier.from_file(file).name # always None
-            unknown_info = struct.unpack("<H", file.read(2))[0] # always 0
+            unknown_info = struct.unpack("<I", file.read(4))[0] # always 0
 
             if num_textures == 2:
                 self.bumpmap = Identifier.from_file(file).name
-                unknown_bumpinfo = struct.unpack("<HH", file.read(4)) # always (512, 0)
+                bump_type = struct.unpack("<I", file.read(4)) # always 512 in vanilla files
+                if not (bump_type & 512):
+                    self.use_heightmap = False
 
             self.assimilation_texture = Identifier.from_file(file).name
             unknown_texinfo = struct.unpack("<H", file.read(2))[0] #always 0
@@ -178,8 +182,15 @@ class Mesh:
                 array += Identifier(self.material).to_bytearray()
 
         if (sod_version >= 1.93):
-            array += struct.pack("<I", 0) # 0, 4 or 6 (6 with bumpmap?)
-            num_textures = 2 if self.bumpmap else 1
+            num_textures = 1
+            mesh_flag = 0
+            if self.bumpmap:
+                num_textures = 2
+                mesh_flag += 2 # use bumpmapping
+            if self.illumination:
+                mesh_flag += 4 # use texture alpha channel for self illumination
+
+            array += struct.pack("<I", mesh_flag)
             array += struct.pack("<I", num_textures)
 
         array += Identifier(self.texture).to_bytearray()
@@ -190,11 +201,10 @@ class Mesh:
             array += Identifier(self.assimilation_texture).to_bytearray()
             array += struct.pack("<H", 0)
         elif (sod_version >= 1.93):
-            array += Identifier(self.unknown_texture).to_bytearray()
-            array += struct.pack("<H", 0)
+            array += struct.pack("<I", 0)
             if num_textures == 2:
                 array += Identifier(self.bumpmap).to_bytearray()
-                array += struct.pack("<HH", 512, 0)
+                array += struct.pack("<I", 512 if self.use_heightmap else 0) # 512 is a flag to use a hightmap instead of a normalmap
             array += Identifier(self.assimilation_texture).to_bytearray()
             array += struct.pack("<H", 0)
 
