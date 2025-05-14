@@ -20,8 +20,8 @@
 bl_info = {
     "name": "Star Trek Armada Tools",
     "author": "SomaZ",
-    "version": (0, 9, 10),
-    "description": "Importer/Exporter for Star Trek Armada sod files",
+    "version": (0, 9, 11),
+    "description": "Importer/Exporter for Star Trek Armada (I and II) sod files",
     "blender": (4, 1, 0),
     "location": "File > Import-Export",
     "warning": "",

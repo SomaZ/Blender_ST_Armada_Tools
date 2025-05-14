@@ -212,7 +212,7 @@ class STA_II_Dynamic_Node_Properties(PropertyGroup):
              "Normalmap", 1),
         ])
     assimilation_texture_name: StringProperty(
-        name="Assimilation texture",
+        name="Borg texture",
         description="Changes the models texture when it's assimilated",
         default=""
     )
@@ -476,6 +476,7 @@ class STA_OP_LoadMeshTexture(bpy.types.Operator):
     filename_ext = ".tga"
     filter_glob: StringProperty(default="*.tga", options={'HIDDEN'})
     directory: StringProperty()
+    texture: StringProperty(default="TEXTURE")
 
     def execute(self, context):
         sanitized_path = self.filepath.replace("\\", "/")
@@ -483,7 +484,13 @@ class STA_OP_LoadMeshTexture(bpy.types.Operator):
         if texture.lower().endswith(".tga"):
             texture = texture[:-len(".tga")]
         obj = context.object
-        obj.sta_dynamic_props.texture_name = texture
+
+        if self.texture == "TEXTURE":
+            obj.sta_dynamic_props.texture_name = texture
+        if self.texture == "BUMP":
+            obj.sta_II_dynamic_props.bumpmap_texture_name = texture
+        if self.texture == "BORG":
+            obj.sta_II_dynamic_props.assimilation_texture_name = texture
         if context.scene.sta_sod_file_path == "":
             context.scene.sta_sod_file_path = sanitized_path
 
@@ -576,17 +583,8 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         layout.prop(obj.sta_dynamic_props, "material_type")
         layout.prop(obj.sta_dynamic_props, "face_cull")
         layout.prop(obj.sta_dynamic_props, "texture_name")
-        row = layout.row()
-        row.operator("sta.udpate_all_object_materials")
-        row.operator("sta.load_mesh_texture")
-
-        layout.separator()
-        layout.label(text="Armada II mesh properties")
-
-        layout.prop(obj.sta_II_dynamic_props, "self_illumination")
-        layout.prop(obj.sta_II_dynamic_props, "bumpmap_texture_name")
-        layout.prop(obj.sta_II_dynamic_props, "bumpmap_type")
-        layout.prop(obj.sta_II_dynamic_props, "assimilation_texture_name")
+        layout.operator("sta.load_mesh_texture", text="Load new mesh texture", icon="TEXTURE").texture = "TEXTURE"
+        layout.operator("sta.udpate_all_object_materials")
 
         layout.separator()
         layout.prop(obj.sta_dynamic_props, "texture_animated")
@@ -602,6 +600,17 @@ class STA_PT_EntityPanel(bpy.types.Panel):
             if "ref_offset" in obj:
                 row = layout.row()
                 row.prop(obj, '["ref_offset"]', text = "Offset")
+
+        layout.separator()
+        layout.label(text="Armada II mesh properties")
+
+        layout.prop(obj.sta_II_dynamic_props, "self_illumination")
+        layout.prop(obj.sta_II_dynamic_props, "bumpmap_texture_name")
+        layout.prop(obj.sta_II_dynamic_props, "bumpmap_type")
+        layout.operator("sta.load_mesh_texture", text="Load new bump texture", icon="TEXTURE").texture = "BUMP"
+        
+        layout.prop(obj.sta_II_dynamic_props, "assimilation_texture_name")
+        layout.operator("sta.load_mesh_texture", text="Load new borg texture", icon="TEXTURE").texture = "BORG"
 
 
 class STA_OP_Toggle_Material_Export(bpy.types.Operator):
