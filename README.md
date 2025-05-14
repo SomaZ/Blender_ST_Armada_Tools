@@ -1,7 +1,7 @@
 # Blender Star Trek Armada Tools
 
 This is a blender addon for importing and exporting meshes for the games Star Trek: Armada and Star Trek: Armada II. Star Trek: Legacy uses a newer version of the engine and some files are potentially supported already, but isn't implemented.
-The current implementation only supports previewing Aramada I materials. Some of the Armada II material settings aren't implemented yet.
+The current implementation only supports previewing Armada I materials. Some of the Armada II material settings aren't implemented yet.
 
 **Please do not use this addon to copy or steal another creators work. Always ask for the creators permission.**
 
