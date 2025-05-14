@@ -197,7 +197,7 @@ class STA_II_Dynamic_Node_Properties(PropertyGroup):
         default=False
     )
     bumpmap_texture_name: StringProperty(
-        name="Bumpmap (Armada 2)",
+        name="Bumpmap",
         description="Changes the models bumpmap",
         default=""
     )
@@ -212,7 +212,7 @@ class STA_II_Dynamic_Node_Properties(PropertyGroup):
              "Normalmap", 1),
         ])
     assimilation_texture_name: StringProperty(
-        name="Assimilation texture (Armada 2)",
+        name="Assimilation texture",
         description="Changes the models texture when it's assimilated",
         default=""
     )
@@ -579,6 +579,9 @@ class STA_PT_EntityPanel(bpy.types.Panel):
         row = layout.row()
         row.operator("sta.udpate_all_object_materials")
         row.operator("sta.load_mesh_texture")
+
+        layout.separator()
+        layout.label(text="Armada II mesh properties")
 
         layout.prop(obj.sta_II_dynamic_props, "self_illumination")
         layout.prop(obj.sta_II_dynamic_props, "bumpmap_texture_name")

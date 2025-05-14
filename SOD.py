@@ -152,7 +152,7 @@ class Mesh:
 
             if num_textures == 2:
                 self.bumpmap = Identifier.from_file(file).name
-                bump_type = struct.unpack("<I", file.read(4)) # always 512 in vanilla files
+                bump_type = struct.unpack("<I", file.read(4))[0] # always 512 in vanilla files
                 if not (bump_type & 512):
                     self.use_heightmap = False
 
