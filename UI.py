@@ -26,6 +26,7 @@ def guess_texture_path(file_path):
 
 
 class Import_STA_SOD(bpy.types.Operator, ImportHelper):
+    """Import a Star Trek Armada (I or II) sod file"""
     bl_idname = "import_scene.sta_sod"
     bl_label = "Import Star Trek Armada SOD (.sod)"
     filename_ext = ".sod"
@@ -55,6 +56,7 @@ class Import_STA_SOD(bpy.types.Operator, ImportHelper):
 
 
 class Export_STA_SOD(bpy.types.Operator, ExportHelper):
+    """Export a Star Trek Armada (I or II) sod file"""
     bl_idname = "export_scene.sta_sod"
     bl_label = "Export Star Trek Armada SOD (.sod)"
     filename_ext = ".sod"
